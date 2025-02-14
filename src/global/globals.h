@@ -9,6 +9,7 @@ struct globals {
     int verbose;
     char *input_file;
     char *output_file;
+    // int max_sr;
 };
 
 extern struct globals global;

@@ -1,0 +1,142 @@
+extern void printInt(int n);
+extern void printNewlines(int n);
+
+extern int gcd(int a, int b);
+extern int fac(int n);
+extern int fib(int n);
+extern bool isprime(int n);
+
+extern void fibs(int n);
+extern void primes(int n);
+
+extern void printIntVec(int[n] vec);
+extern void printFloatVec(float[n] vec);
+extern void printIntMat(int[m,n] mat);
+extern void printFloatMat(float[m,n] mat);
+extern void scanIntVec(int[n] vec);
+extern void scanFloatVec(float[n] vec);
+extern void scanIntMat(int[m,n] mat);
+extern void scanFloatMat(float[m,n] mat);
+extern void matMul(float[m,n] a, float[o,p] b, float[q,l] c);
+
+void testGcd() {
+    printInt(gcd(12, 8)); // Expected 4
+    printNewlines(1);
+    printInt(gcd(35, 14)); // Expected 7
+    printNewlines(1);
+    printInt(gcd(7, 5)); // Expected 1
+    printNewlines(2);
+}
+
+void testFac() {
+    printInt(fac(0)); // Expected 1
+    printNewlines(1);
+    printInt(fac(5)); // Expected 120
+    printNewlines(2);
+}
+
+void testFib() {
+    printInt(fib(5)); // Expected 5
+    printNewlines(1);
+    printInt(fib(1)); // Expected 1
+    printNewlines(2);
+}
+
+void testIsPrime() {
+    printInt((int) isprime(2)); // Expected 1 (true)
+    printNewlines(1);
+    printInt((int) isprime(9)); // Expected 0 (false)
+    printNewlines(1);
+    printInt((int) isprime(7)); // Expected 1 (true)
+    printNewlines(2);
+}
+
+void testFibs() {
+    fibs(8); // Expected 0 1 1 2 3 5 8 13
+    printNewlines(2);
+}
+
+void testPrimes() {
+    primes(5); // Expected 2 3 5 7 11
+    printNewlines(2);
+}
+
+void testPrintIntVec() {
+    int[3] vec = [1, 2, 3];
+    printIntVec(vec); // Output: 1 2 3
+    printNewlines(2);
+}
+
+void testPrintFloatVec() {
+    float[2] vec = [1.5, 3.14];
+    printFloatVec(vec); // Output: 1.5 3.14
+    printNewlines(2);
+}
+
+void testPrintIntMat() {
+    int[2,2] mat = [[1, 2], [3, 4]];
+    printIntMat(mat); // Output rows: 1 2\n3 4
+    printNewlines(2);
+}
+
+void testPrintFloatMat() {
+    float[2,2] mat = [[1.1, 2.2], [3.3, 4.4]];
+    printFloatMat(mat); // Output rows: 1.1 2.2\n3.3 4.4
+    printNewlines(2);
+}
+
+void testScanIntVec() {
+    int[3] vec;
+    scanIntVec(vec);
+    printIntVec(vec); // Requires input of 3 integers
+    printNewlines(2);
+}
+
+void testScanFloatVec() {
+    float[3] vec;
+    scanFloatVec(vec);
+    printFloatVec(vec); // Requires input of 3 floats
+    printNewlines(2);
+}
+
+void testScanIntMat() {
+    int[2,2] mat;
+    scanIntMat(mat);
+    printIntMat(mat); // Requires input of 4 integers
+    printNewlines(2);
+}
+
+void testScanFloatMat() {
+    float[2,2] mat;
+    scanFloatMat(mat);
+    printFloatMat(mat); // Requires input of 4 floats
+    printNewlines(2);
+}
+
+void testMatMul() {
+    float[2,2] a = [[2.0, 2.0], [2.0, 1.0]];
+    float[2,2] b = [[8.0, 7.0], [2.0, 1.0]];
+    float[2,2] c;
+    matMul(a, b, c);
+    printFloatMat(c); // Expected [[20.0, 16.0], [18.0, 15.0]]
+    printNewlines(2);
+}
+
+export int main() {
+	testGcd();
+    testFac();
+    testFib();
+    testIsPrime();
+    testFibs();
+    testPrimes();
+    testPrintIntVec();
+    testPrintFloatVec();
+    testPrintIntMat();
+    testPrintFloatMat();
+    testScanIntVec();
+    testScanFloatVec();
+    testScanIntMat();
+    testScanFloatMat();
+    testMatMul();
+    return 0;
+}

@@ -3,13 +3,50 @@ start phase RootPhase {
 
     actions {
         pass SPdoScanParse;
-        Demo;
+        CountBinops;
+        CountIdentifiers;
+        PerformOptimisations;
+        // Demo;
         print;
+    }
+};
+
+traversal CountBinops {
+    uid = CBO,
+    nodes = { Binop, Program },
+    travdata {
+        int sum_add,
+        int sum_sub,
+        int sum_mul,
+        int sum_div,
+        int sum_mod
+    }
+};
+
+traversal CountIdentifiers {
+    uid = CI,
+    nodes = { Program, Var, VarLet },
+    travdata {
+        user htable_stptr identifier_counts
     }
 };
 
 traversal Print {
     uid = PRT
+};
+
+traversal Eval {
+    uid = EV,
+    nodes = Expr
+};
+
+phase PerformOptimisations {
+    actions {
+        traversal StrengthReduction {
+            uid = OSR,
+            nodes = { Binop }
+        };
+    }
 };
 
 phase Demo {
@@ -60,6 +97,14 @@ nodeset Link = Expr | Stmt;
 root node Program {
     children {
         Stmts stmts { constructor, mandatory }
+    },
+
+    attributes {
+        int sum_add,
+        int sum_sub,
+        int sum_mul,
+        int sum_div,
+        int sum_mod
     }
 };
 

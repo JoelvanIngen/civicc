@@ -12,12 +12,24 @@
 #include "ccngen/trav.h"
 #include "palm/dbug.h"
 
+void printArithCounts(node_st *node) {
+    int add = PROGRAM_SUM_ADD(node);
+    int sub = PROGRAM_SUM_SUB(node);
+    int mul = PROGRAM_SUM_MUL(node);
+    int div = PROGRAM_SUM_DIV(node);
+    int mod = PROGRAM_SUM_MOD(node);
+
+    printf("+: %i\n-: %i\n*: %i\n/: %i\n%%: %i\n",
+        add, sub, mul, div, mod);
+}
+
 /**
  * @fn PRTprogram
  */
 node_st *PRTprogram(node_st *node)
 {
     TRAVstmts(node);
+    printArithCounts(node);
     return node;
 }
 

@@ -1,0 +1,63 @@
+extern void printInt(int val);
+extern void printNewlines(int num);
+
+export int gcd(int a, int b) {
+	int i = a;
+
+	while (i > 1) {
+		if (a % i == 0 && b % i == 0) {
+			return i;
+		}
+
+		i = i - 1;
+	}
+
+	return i;
+}
+
+export int fac(int n) {
+	int res = 1;
+
+	if (n == 0) {
+		return res;
+	}
+
+	while (n > 1) {
+		res = res * n;
+		n = n - 1;
+	}
+
+	return res;
+}
+
+export int fib(int n) {
+    int curr = 0;
+
+	int prev1 = 1;
+	int prev2 = 0;
+
+    if (n <= 1) {
+        return n;
+    }
+
+	for (int i = 1, n) {
+		curr = prev1 + prev2;
+		prev2 = prev1;
+		prev1 = curr;
+	}
+
+	return curr;
+}
+
+export bool isprime(int n) {
+	if (n == 1) return false;
+	if (n == 2) return true;
+
+	if (n % 2 == 0) return false;
+
+	for (int check = 3, (n + 1)/2, 2) {
+		if (n % check == 0) return false;
+	}
+
+	return true;
+}

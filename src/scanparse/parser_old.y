@@ -39,9 +39,18 @@ void AddLocToNode(node_st *node, void *begin_loc, void *end_loc);
 %token <cflt> FLOAT
 %token <id> ID
 
+// Precedence low to high
+%nonassoc LET          // Lowest precedence
+%left OR               // Logical OR
+%left AND              // Logical AND
+%left EQ NE            // Equality and inequality
+%left LT LE GT GE      // Relational operators
+%left PLUS MINUS       // Additive operators
+%left STAR SLASH PERCENT // Multiplicative operators
+
 %type <node> intval floatval boolval constant expr
 %type <node> stmts stmt assign varlet program
-%type <cbinop> binop
+// %type <cbinop> binop  // Remove if binops are removed
 
 %start program
 
@@ -82,6 +91,21 @@ varlet: ID
         }
         ;
 
+/*
+// I think I should remove the entire binop because it seems to not work with the precedence rules?
+binop: PLUS     { $$ = BO_add; }
+     | MINUS    { $$ = BO_sub; }
+     | STAR     { $$ = BO_mul; }
+     | SLASH    { $$ = BO_div; }
+     | PERCENT  { $$ = BO_mod; }
+     | LE       { $$ = BO_le; }
+     | LT       { $$ = BO_lt; }
+     | GE       { $$ = BO_ge; }
+     | GT       { $$ = BO_gt; }
+     | EQ       { $$ = BO_eq; }
+     | OR       { $$ = BO_or; }
+     | AND      { $$ = BO_and; }
+*/
 
 expr: constant
       {
@@ -95,10 +119,70 @@ expr: constant
       {
         $$ = $2;
       }
-    | BRACKET_L expr[left] binop[type] expr[right] BRACKET_R
+    | expr PLUS expr
       {
-        $$ = ASTbinop( $left, $right, $type);
-        AddLocToNode($$, &@left, &@right);
+        $$ = ASTbinop($1, $3, BO_add);
+        AddLocToNode($$, &@1, &@3);
+      }
+    | expr MINUS expr
+      {
+        $$ = ASTbinop($1, $3, BO_sub);
+        AddLocToNode($$, &@1, &@3);
+      }
+    | expr STAR expr
+      {
+        $$ = ASTbinop($1, $3, BO_mul);
+        AddLocToNode($$, &@1, &@3);
+      }
+    | expr SLASH expr
+      {
+        $$ = ASTbinop($1, $3, BO_div);
+        AddLocToNode($$, &@1, &@3);
+      }
+    | expr PERCENT expr
+      {
+        $$ = ASTbinop($1, $3, BO_mod);
+        AddLocToNode($$, &@1, &@3);
+      }
+    | expr LE expr
+      {
+        $$ = ASTbinop($1, $3, BO_le);
+        AddLocToNode($$, &@1, &@3);
+      }
+    | expr LT expr
+      {
+        $$ = ASTbinop($1, $3, BO_lt);
+        AddLocToNode($$, &@1, &@3);
+      }
+    | expr GE expr
+      {
+        $$ = ASTbinop($1, $3, BO_ge);
+        AddLocToNode($$, &@1, &@3);
+      }
+    | expr GT expr
+      {
+        $$ = ASTbinop($1, $3, BO_gt);
+        AddLocToNode($$, &@1, &@3);
+      }
+    | expr EQ expr
+      {
+        $$ = ASTbinop($1, $3, BO_eq);
+        AddLocToNode($$, &@1, &@3);
+      }
+    | expr NE expr
+      {
+        $$ = ASTbinop($1, $3, BO_ne);
+        AddLocToNode($$, &@1, &@3);
+      }
+    | expr OR expr
+      {
+        $$ = ASTbinop($1, $3, BO_or);
+        AddLocToNode($$, &@1, &@3);
+      }
+    | expr AND expr
+      {
+        $$ = ASTbinop($1, $3, BO_and);
+        AddLocToNode($$, &@1, &@3);
       }
     ;
 
@@ -137,20 +221,6 @@ boolval: TRUEVAL
            $$ = ASTbool(false);
          }
        ;
-
-binop: PLUS      { $$ = BO_add; }
-     | MINUS     { $$ = BO_sub; }
-     | STAR      { $$ = BO_mul; }
-     | SLASH     { $$ = BO_div; }
-     | PERCENT   { $$ = BO_mod; }
-     | LE        { $$ = BO_le; }
-     | LT        { $$ = BO_lt; }
-     | GE        { $$ = BO_ge; }
-     | GT        { $$ = BO_gt; }
-     | EQ        { $$ = BO_eq; }
-     | OR        { $$ = BO_or; }
-     | AND       { $$ = BO_and; }
-     ;
 
 %%
 
