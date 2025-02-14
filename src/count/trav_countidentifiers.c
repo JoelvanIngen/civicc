@@ -46,7 +46,7 @@ void printSingleIdentifier(htable_iter_st *iter) {
 }
 
 /**
- * Moves the identifiercounts table to the program data
+ * Iterates over the htable and calls the printer helper function
  */
 void printIdentifierCounts() {
     htable_st *t = DATA_CI_GET()->identifier_counts;
