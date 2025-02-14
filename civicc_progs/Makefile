@@ -1,2 +1,2 @@
 make:
-	civrun test.cvc core.cvc coreio.cvc array.cvc
+	civrun test_main.cvc core.cvc coreio.cvc array.cvc
