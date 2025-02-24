@@ -7,7 +7,7 @@
 start phase RootPhase {
     actions {
         pass SPdoScanParse;
-        print;
+        Print;
     }
 };
 

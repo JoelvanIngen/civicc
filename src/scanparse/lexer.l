@@ -36,11 +36,17 @@ int yycolumn = 1;
 %option nounput
 %option yylineno
 
+%x COMMENT
+
 
 %%
 
 "("                        { FILTER( BRACKET_L); }
 ")"                        { FILTER( BRACKET_R); }
+"{"                        { FILTER(BRACE_L); }
+"}"                        { FILTER(BRACE_R); }
+"["                        { FILTER( SBRACKET_L); }
+"]"                        { FILTER( SBRACKET_R); }
 ","                        { FILTER( COMMA); }
 ";"                        { FILTER( SEMICOLON); }
 
@@ -59,10 +65,35 @@ int yycolumn = 1;
 "&&"                       { FILTER( AND);    }
 "||"                       { FILTER( OR);    }
 
+"!"                        { FILTER(NOT); }
+
 "="                        { FILTER( LET);    }
+
+"int"                      { FILTER(INTTYPE); }
+"float"                    { FILTER(FLOATTYPE); }
+"bool"                     { FILTER(BOOLTYPE); }
+"void"                     { FILTER(VOIDTYPE); }
 
 "true"                     { FILTER( TRUEVAL); }
 "false"                    { FILTER( FALSEVAL); }
+
+"if"                       { FILTER(IF)}
+"else"                     { FILTER(ELSE)}
+"while"                    { FILTER(WHILE)}
+"do"                       { FILTER(DO)}
+"for"                      { FILTER(FOR)}
+"return"                   { FILTER(RETURN)}
+
+"export"                   { FILTER(EXPORT)}
+"extern"                   { FILTER(EXTERN)}
+
+"//".*                     {  } // Skip single-line comments
+"/*"                       { BEGIN(COMMENT); }
+<COMMENT>[^*]+             {  } // Skip everything that is not "*"
+<COMMENT>"*"+[^*/]*        {  } // Skip stars if not followed by "/"
+<COMMENT>[\n]              { global.line += 1; global.col = 1; }
+<COMMENT>"*"+"/"           { BEGIN(INITIAL); }
+
 
 [A-Za-z][A-Za-z0-9_]*      { yylval.id = STRcpy(yytext);
                              FILTER( ID);
@@ -70,6 +101,10 @@ int yycolumn = 1;
 
 [0-9]+                     { yylval.cint=atoi(yytext);
                              FILTER( NUM);
+                           }
+
+[0-9]+"."[0-9]+            { yylval.cflt=atof(yytext);
+                             FILTER(FLOAT)
                            }
 
 \n.*                       {
@@ -81,6 +116,8 @@ int yycolumn = 1;
 
 [ \t]                      { global.col += yyleng;
                            }
+
+.                          { fprintf(stderr, "LEXER: unexpected character '%s' at line %d, column %d\n", yytext, yylineno, yycolumn); }
 %%
 
 static inline void token_action() {
