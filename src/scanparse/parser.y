@@ -57,9 +57,12 @@ void AddLocToNode(node_st *node, void *begin_loc, void *end_loc);
 %type <ctype> type
 %type <node> constants operations decl stmt
 
-%type <node> opt_vardecl opt_fundefs opt_stmts opt_exprs
+%type <node> opt_vardecls opt_fundefs opt_stmts opt_exprs
 %type <node> opt_params param_list opt_funbody opt_ids opt_dims
+%type <node> vardecls
 %type <cbool> opt_export_bool
+
+%type <node> primitive preclvl1 preclvl2 preclvl3 preclvl4 preclvl5 preclvl6
 
 // Precedence rules
 %left OR AND
@@ -174,11 +177,11 @@ fundefs: fundef fundefs
          }
          ;
 
-opt_vardecl: vardecl { $$ = $1; } | /* Empty */ { $$ = NULL; };
+opt_vardecls: vardecls { $$ = $1; } | /* Empty */ { $$ = NULL; };
 opt_fundefs: fundefs { $$ = $1; } | /* Empty */ { $$ = NULL; };
-// opt_stmts: stmts { $$ = $1; } | /* Empty */ { $$ = NULL; };
+opt_stmts: stmts { $$ = $1; } | /* Empty */ { $$ = NULL; };
 
-funbody: BRACE_L[startbrace] opt_vardecl[decls] opt_fundefs[fundefs] stmts[stmts] BRACE_R[endbrace]
+funbody: BRACE_L[startbrace] opt_vardecls[decls] opt_fundefs[fundefs] opt_stmts[stmts] BRACE_R[endbrace]
           {
             $$ = ASTfunbody();
             FUNBODY_DECLS($$) = $decls;
@@ -205,18 +208,18 @@ assign: varlet LET expr SEMICOLON
 
 exprstmt: expr SEMICOLON { $$ = ASTexprstmt($1); };
 
-ifstmt: IF BRACKET_L expr[cond] BRACKET_R BRACE_L stmts[then] BRACE_R ELSE BRACE_L stmts[else] BRACE_R
+ifstmt: IF BRACKET_L expr[cond] BRACKET_R BRACE_L stmts[thenblock] BRACE_R ELSE BRACE_L stmts[elseblock] BRACE_R
         {
           $$ = ASTifelse($cond);
-          IFELSE_THEN($$) = $then;
-          IFELSE_ELSE_BLOCK($$) = $else;
-          AddLocToNode($$, &@1, &@else);
+          IFELSE_THEN($$) = $thenblock;
+          IFELSE_ELSE_BLOCK($$) = $elseblock;
+          AddLocToNode($$, &@1, &@elseblock);
         }
-      | IF BRACKET_L expr[cond] BRACKET_R BRACE_L stmts[then] BRACE_R
+      | IF BRACKET_L expr[cond] BRACKET_R BRACE_L stmts[thenblock] BRACE_R
         {
           $$ = ASTifelse($cond);
-          IFELSE_THEN($$) = $then;
-          AddLocToNode($$, &@1, &@then);
+          IFELSE_THEN($$) = $thenblock;
+          AddLocToNode($$, &@1, &@thenblock);
         }
         ;
 
@@ -261,10 +264,14 @@ returnstmt: RETURN expr[val] SEMICOLON
             }
           ;
 
-funcall: ID[name] BRACKET_L exprs[args] BRACKET_R
+funcall:  ID[name] BRACKET_L exprs[args] BRACKET_R
         {
           $$ = ASTfuncall($name);
           FUNCALL_FUN_ARGS($$) = $args;
+        }
+        | ID[name] BRACKET_L BRACKET_R
+        {
+          $$ = ASTfuncall($name);
         }
         ;
 
@@ -281,17 +288,26 @@ ids: ID
 
 opt_exprs: exprs { $$ = $1; } | /* Empty */ { $$ = NULL; };
 
-vardecl: type[t] ID[name] SEMICOLON  // TODO: ADD DIMS
+vardecls: vardecl vardecls
+        {
+          $$ = $1;
+          VARDECL_NEXT($1) = $2;
+        }
+        | vardecl
+        {
+          $$ = $1;
+        }
+
+vardecl: type[t] ID[name] SEMICOLON
         {
           $$ = ASTvardecl($name, $t);
-          // VARDECL_DIMS($$) = $dims;
         }
        | type[t] ID[name] LET expr[init] SEMICOLON
         {
           $$ = ASTvardecl($name, $t);
           VARDECL_INIT($$) = $init;
-          // VARDECL_DIMS($$) = $dims;
         }
+        ;
 
 varlet: ID[id] SBRACKET_L exprs[indices] SBRACKET_R
         {
@@ -319,38 +335,54 @@ var: ID[id] SBRACKET_L exprs[indices] SBRACKET_R
         }
         ;
 
-exprs: expr exprs { $$ = ASTexprs($1, $2); }
+exprs: expr exprs { $$ = ASTexprs($1, $2); }  // Does expr exprs even exist?
      | expr COMMA exprs { $$ = ASTexprs($1, $3); }
      | expr { $$ = ASTexprs($1, NULL); }
      ;
 
-expr: constants
-      {
-        $$ = $1;
-      }
-    | var
-      {
-        $$ = $1;
-      }
-    | funcall
-      {
-        $$ = $1;
-      }
-    | BRACKET_L expr BRACKET_R
-      {
-        $$ = $2;
-      }
-    | expr[left] binop[type] expr[right]
-      {
-        $$ = ASTbinop( $left, $right, $type);
-        AddLocToNode($$, &@left, &@right);
-      }
-    | expr[operand] monop[operator]
-      {
-        $$ = ASTmonop($operand, $operator);
-        AddLocToNode($$, &@operand, &@operator);
-      }
-    ;
+/* EXPRESSIONS AND PRECEDENCE */
+
+expr: preclvl6;
+
+preclvl6: preclvl6 OR preclvl5 { $$ = ASTbinop($1, $3, BO_or); AddLocToNode($$, &@1, &@3); }
+        | preclvl5
+        ;
+
+preclvl5: preclvl5 AND preclvl4 { $$ = ASTbinop($1, $3, BO_and); AddLocToNode($$, &@1, &@3); }
+        | preclvl4
+        ;
+
+preclvl4: preclvl4 EQ preclvl3 { $$ = ASTbinop($1, $3, BO_eq); AddLocToNode($$, &@1, &@3); }
+        | preclvl4 NE preclvl3 { $$ = ASTbinop($1, $3, BO_ne); AddLocToNode($$, &@1, &@3); }
+        | preclvl4 LT preclvl3 { $$ = ASTbinop($1, $3, BO_lt); AddLocToNode($$, &@1, &@3); }
+        | preclvl4 LE preclvl3 { $$ = ASTbinop($1, $3, BO_le); AddLocToNode($$, &@1, &@3); }
+        | preclvl4 GT preclvl3 { $$ = ASTbinop($1, $3, BO_gt); AddLocToNode($$, &@1, &@3); }
+        | preclvl4 GE preclvl3 { $$ = ASTbinop($1, $3, BO_ge); AddLocToNode($$, &@1, &@3); }
+        | preclvl3
+        ;
+
+preclvl3: preclvl3 PLUS preclvl2 { $$ = ASTbinop($1, $3, BO_add); AddLocToNode($$, $1, $3); }
+        | preclvl3 MINUS preclvl2 { $$ = ASTbinop($1, $3, BO_sub); AddLocToNode($$, $1, $3); }
+        | preclvl2
+        ;
+
+preclvl2: preclvl2 STAR preclvl1 { $$ = ASTbinop($1, $3, BO_mul); AddLocToNode($$, $1, $3); }
+        | preclvl2 SLASH preclvl1 { $$ = ASTbinop($1, $3, BO_div); AddLocToNode($$, $1, $3); }
+        | preclvl2 PERCENT preclvl1 { $$ = ASTbinop($1, $3, BO_mod); AddLocToNode($$, $1, $3); }
+        | preclvl1
+        ;
+
+preclvl1: MINUS primitive { $$ = ASTmonop($2, MO_neg); AddLocToNode($$, &@1, &@2); };
+        | primitive
+        ;
+
+primitive: constants
+         | var
+         | funcall
+         | BRACKET_L expr BRACKET_R { $$ = $2; }
+         ;
+
+/* END EXPRESSIONS AND PRECEDENCE */
 
 constants: floatval
           {
@@ -389,7 +421,7 @@ boolval: TRUEVAL
        ;
 
 monop: NOT       { $$ = MO_not; }
-    //  | MINUS     { $$ = MO_neg; }
+     | MINUS     { $$ = MO_neg; }
      ;
 
 binop: PLUS      { $$ = BO_add; }

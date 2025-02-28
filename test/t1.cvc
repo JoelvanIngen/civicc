@@ -1,0 +1,5 @@
+// Basic test case
+
+int main() {
+	return 0;
+}

@@ -1,0 +1,10 @@
+// Declaring, assigning adding and returning a variable
+
+export int main() {
+	int x;
+	int y = 2;
+	int z;
+	x = 5;
+	z = x + y;
+	return z;
+}
