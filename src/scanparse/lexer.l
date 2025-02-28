@@ -41,41 +41,41 @@ int yycolumn = 1;
 
 %%
 
-"("                        { FILTER( BRACKET_L); }
-")"                        { FILTER( BRACKET_R); }
+"("                        { FILTER(BRACKET_L); }
+")"                        { FILTER(BRACKET_R); }
 "{"                        { FILTER(BRACE_L); }
 "}"                        { FILTER(BRACE_R); }
-"["                        { FILTER( SBRACKET_L); }
-"]"                        { FILTER( SBRACKET_R); }
-","                        { FILTER( COMMA); }
-";"                        { FILTER( SEMICOLON); }
+"["                        { FILTER(SBRACKET_L); }
+"]"                        { FILTER(SBRACKET_R); }
+","                        { FILTER(COMMA); }
+";"                        { FILTER(SEMICOLON); }
 
-"-"                        { FILTER( MINUS); }
-"+"                        { FILTER( PLUS);  }
-"*"                        { FILTER( STAR);  }
-"/"                        { FILTER( SLASH);  }
-"%"                        { FILTER( PERCENT);  }
+"-"                        { FILTER(MINUS); }
+"+"                        { FILTER(PLUS);  }
+"*"                        { FILTER(STAR);  }
+"/"                        { FILTER(SLASH);  }
+"%"                        { FILTER(PERCENT);  }
 
-"<="                       { FILTER( LE);    }
-"<"                        { FILTER( LT);    }
-">="                       { FILTER( GE);    }
-">"                        { FILTER( GT);    }
-"=="                       { FILTER( EQ);    }
-"!="                       { FILTER( NE);    }
-"&&"                       { FILTER( AND);    }
-"||"                       { FILTER( OR);    }
+"<="                       { FILTER(LE);    }
+"<"                        { FILTER(LT);    }
+">="                       { FILTER(GE);    }
+">"                        { FILTER(GT);    }
+"=="                       { FILTER(EQ);    }
+"!="                       { FILTER(NE);    }
+"&&"                       { FILTER(AND);    }
+"||"                       { FILTER(OR);    }
 
 "!"                        { FILTER(NOT); }
 
-"="                        { FILTER( LET);    }
+"="                        { FILTER(LET);    }
 
 "int"                      { FILTER(INTTYPE); }
 "float"                    { FILTER(FLOATTYPE); }
 "bool"                     { FILTER(BOOLTYPE); }
 "void"                     { FILTER(VOIDTYPE); }
 
-"true"                     { FILTER( TRUEVAL); }
-"false"                    { FILTER( FALSEVAL); }
+"true"                     { FILTER(TRUEVAL); }
+"false"                    { FILTER(FALSEVAL); }
 
 "if"                       { FILTER(IF)}
 "else"                     { FILTER(ELSE)}
@@ -96,11 +96,11 @@ int yycolumn = 1;
 
 
 [A-Za-z][A-Za-z0-9_]*      { yylval.id = STRcpy(yytext);
-                             FILTER( ID);
+                             FILTER(ID);
                            }
 
 [0-9]+                     { yylval.cint=atoi(yytext);
-                             FILTER( NUM);
+                             FILTER(NUM);
                            }
 
 [0-9]+"."[0-9]+            { yylval.cflt=atof(yytext);
