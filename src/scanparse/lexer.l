@@ -89,9 +89,9 @@ int yycolumn = 1;
 
 "//".*                     {  } // Skip single-line comments
 "/*"                       { BEGIN(COMMENT); }
+<COMMENT>\n                { global.line += 1; global.col = 1; }
 <COMMENT>[^*]+             {  } // Skip everything that is not "*"
 <COMMENT>"*"+[^*/]*        {  } // Skip stars if not followed by "/"
-<COMMENT>[\n]              { global.line += 1; global.col = 1; }
 <COMMENT>"*"+"/"           { BEGIN(INITIAL); }
 
 
