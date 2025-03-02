@@ -23,6 +23,7 @@ static char *INT_STRING = "int";
 static char *FLOAT_STRING = "float";
 static char *VOID_STRING = "void";
 
+static char *MONOP_OP_STRINGS[] = {"", "!", "-"};
 static char *BINOP_OP_STRINGS[] = {"", "+", "-", "*", "/", "%", "<", "<=", ">", ">=", "==", "!=", "&&", "||"};
 
 static char *bool_to_string(const bool b) {
@@ -321,7 +322,9 @@ node_st *PRTbinop(node_st *node)
  */
 node_st *PRTmonop(node_st *node)
 {
+    printf("MONOP(%s", MONOP_OP_STRINGS[MONOP_OP(node)]);
     TRAVchildren(node);
+    printf(")");
     return node;
 }
 
