@@ -8,11 +8,16 @@ start phase RootPhase {
     actions {
         pass SPdoScanParse;
         Print;
+        SyntacticAnalysis;
     }
 };
 
 traversal Print {
     uid = PRT
+};
+
+traversal SyntacticAnalysis {
+    uid = SAN
 };
 
 /*****************************************************************************
