@@ -46,6 +46,8 @@ static void print_indent() {
     }
 }
 
+
+
 /**
  * @fn PRTprogram
  */
@@ -189,7 +191,7 @@ node_st *PRTfunbody(node_st *node)
  */
 node_st *PRTifelse(node_st *node)
 {
-    printf("START IFSTMT(cond=");
+    printf("START IF(cond=");
     TRAVcond(node);
     printf(")");
     INDENT++;
@@ -205,7 +207,7 @@ node_st *PRTifelse(node_st *node)
         printf("\n");
     }
     print_indent();
-    printf("END IFSTMT");
+    printf("END IF");
     return node;
 }
 
@@ -214,7 +216,15 @@ node_st *PRTifelse(node_st *node)
  */
 node_st *PRTwhile(node_st *node)
 {
-    TRAVchildren(node);
+    printf("START WHILE(cond=");
+    TRAVcond(node);
+    printf(")");
+    INDENT++;
+    TRAVblock(node);
+    INDENT--;
+    printf("\n");
+    print_indent();
+    printf("END WHILE");
     return node;
 }
 

@@ -55,21 +55,12 @@ void AddLocToNode(node_st *node, void *begin_loc, void *end_loc);
 
 // type <node> operations cast arrexpr 
 
-%type <node> opt_vardecls opt_fundefs opt_stmts
+%type <node> opt_vardecls opt_fundefs opt_stmts opt_expr_indices
 %type <node> opt_params param_list
 %type <node> vardecls
 %type <cbool> opt_export_bool
 
 %type <node> primitive preclvl1 preclvl2 preclvl3 preclvl4 preclvl5 preclvl6
-
-// Precedence rules
-%left OR AND
-%left EQ NE
-%left LT LE GT GE
-%left PLUS MINUS
-%left STAR SLASH PERCENT
-%right NOT
-%right UMINUS
 
 %start program
 
@@ -294,42 +285,44 @@ vardecls: vardecl vardecls
           $$ = $1;
         }
 
-vardecl: type[t] ID[name] SEMICOLON
+vardecl: type[t] ID[name] opt_expr_indices[indices] SEMICOLON
         {
           $$ = ASTvardecl($name, $t);
+          VARDECL_DIMS($$) = $indices;
         }
-       | type[t] ID[name] LET expr[init] SEMICOLON
+       | type[t] ID[name] opt_expr_indices[indices] LET expr[init] SEMICOLON
         {
           $$ = ASTvardecl($name, $t);
           VARDECL_INIT($$) = $init;
+          VARDECL_DIMS($$) = $indices;
         }
         ;
 
-varlet: ID[id] SBRACKET_L exprs[indices] SBRACKET_R
+varlet: ID[id] opt_expr_indices[indices]
         {
           $$ = ASTvarlet($id);
           VARLET_INDICES($$) = $indices;
           AddLocToNode($$, &@1, &@1);
         }
-      | ID[id]
-        {
-          $$ = ASTvarlet($id);
-          AddLocToNode($$, &@1, &@1);
-        }
         ;
 
-var: ID[id] SBRACKET_L exprs[indices] SBRACKET_R
+var: ID[id] opt_expr_indices[indices]
         {
           $$ = ASTvar($id);
           VAR_INDICES($$) = $indices;
           AddLocToNode($$, &@1, &@1);
         }
-      | ID[id]
-        {
-          $$ = ASTvar($id);
-          AddLocToNode($$, &@1, &@1);
-        }
         ;
+
+opt_expr_indices: SBRACKET_L exprs[e] SBRACKET_R
+                  {
+                    $$ = $e;
+                  }
+                | /* Empty */
+                  {
+                    $$ = NULL;
+                  }
+                  ;
 
 exprs: expr COMMA exprs { $$ = ASTexprs($1, $3); }
      | expr { $$ = ASTexprs($1, NULL); }
