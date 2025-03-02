@@ -286,6 +286,10 @@ node_st *PRTvardecl(node_st *node)
     print_indent();
     printf("VARDECL(name=%s, type=%s)",
         VARDECL_NAME(node), type_to_string(VARDECL_TYPE(node)));
+
+    if VARDECL_INIT(node) {
+        printf(" <- ");
+    }
     TRAVchildren(node);
     return node;
 }
