@@ -117,7 +117,9 @@ node_st *PRTreturn(node_st *node)
  */
 node_st *PRTfuncall(node_st *node)
 {
+    printf("FUNCALL(name=%s", FUNCALL_NAME(node));
     TRAVchildren(node);
+    printf(")");
     return node;
 }
 
@@ -144,7 +146,7 @@ node_st *PRTfundefs(node_st *node)
  */
 node_st *PRTfundef(node_st *node)
 {
-    bool has_body = FUNDEF_BODY(node) != NULL;
+    const bool has_body = FUNDEF_BODY(node) != NULL;
 
     print_indent();
 
@@ -186,7 +188,23 @@ node_st *PRTfunbody(node_st *node)
  */
 node_st *PRTifelse(node_st *node)
 {
-    TRAVchildren(node);
+    printf("START IFSTMT(cond=");
+    TRAVcond(node);
+    printf(")");
+    INDENT++;
+    TRAVthen(node);
+    INDENT--;
+    printf("\n");
+    if IFELSE_ELSE_BLOCK(node) {
+        print_indent();
+        printf("ELSE");
+        INDENT++;
+        TRAVelse_block(node);
+        INDENT--;
+        printf("\n");
+    }
+    print_indent();
+    printf("END IFSTMT");
     return node;
 }
 

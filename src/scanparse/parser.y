@@ -26,8 +26,6 @@ void AddLocToNode(node_st *node, void *begin_loc, void *end_loc);
  int                 cint;
  float               cflt;
  bool               cbool;
- enum MonOpType     cmonop;
- enum BinOpType     cbinop;
  enum Type          ctype;
  node_st             *node;
 }
@@ -46,19 +44,19 @@ void AddLocToNode(node_st *node, void *begin_loc, void *end_loc);
 %token INTTYPE FLOATTYPE BOOLTYPE VOIDTYPE
 %token EXPORT EXTERN
 
-%type <node> program decls expr exprs arrexpr ids exprstmt
-%type <node> returnstmt funcall cast fundefs fundef funbody
+%type <node> program decls expr exprs ids exprstmt
+%type <node> returnstmt funcall fundefs fundef funbody
 %type <node> ifstmt whilestmt dowhilestmt forstmt
 %type <node> globdecl globdef param vardecl stmts
 %type <node> assign varlet var
 %type <node> intval floatval boolval
-%type <cmonop> monop
-%type <cbinop> binop
 %type <ctype> type
-%type <node> constants operations decl stmt
+%type <node> constants decl stmt
 
-%type <node> opt_vardecls opt_fundefs opt_stmts opt_exprs
-%type <node> opt_params param_list opt_funbody opt_ids opt_dims
+// type <node> operations cast arrexpr 
+
+%type <node> opt_vardecls opt_fundefs opt_stmts
+%type <node> opt_params param_list
 %type <node> vardecls
 %type <cbool> opt_export_bool
 
@@ -111,10 +109,9 @@ globdecl: EXTERN type[t] ids[dims] ID[name] SEMICOLON
           }
           ;
 
-globdef: opt_export_bool[export] type[t] opt_ids[dims] ID[name] LET expr[init] SEMICOLON
+globdef: opt_export_bool[export] type[t] ID[name] LET expr[init] SEMICOLON
         {
           $$ = ASTglobdef($name, $t);
-          GLOBDEF_DIMS($$) = $dims;
           GLOBDEF_INIT($$) = $init;
           GLOBDEF_EXPORT($$) = $export;
           AddLocToNode($$, &@t, &@init);
@@ -122,8 +119,6 @@ globdef: opt_export_bool[export] type[t] opt_ids[dims] ID[name] LET expr[init] S
         ;
 
 opt_export_bool: EXPORT { $$ = true; } | /* Empty */ { $$ = false; };
-
-opt_ids: ids { $$ = $1; } | /* Empty */ { $$ = NULL; };
 
 stmts: stmt stmts
         {
@@ -154,9 +149,7 @@ param_list: param { $$ = $1; }
             }
             ;
 
-opt_funbody: funbody { $$ = $1; } | /* Empty */ { $$ = NULL; };
-
-fundef: opt_export_bool[export] type[t] ID[name] BRACKET_L opt_params[params] BRACKET_R opt_funbody[body]
+fundef: opt_export_bool[export] type[t] ID[name] BRACKET_L opt_params[params] BRACKET_R funbody[body]
         {
           $$ = ASTfundef($name, $t);
           FUNDEF_PARAMS($$) = $params;
@@ -191,10 +184,15 @@ funbody: BRACE_L[startbrace] opt_vardecls[decls] opt_fundefs[fundefs] opt_stmts[
           }
           ;
 
-param: type[t] ID[id] ids[dims]
+param: type[t] ID[id] SBRACKET_L ids[dims] SBRACKET_L
       {
         $$ = ASTparam($id, $t);
         PARAM_DIMS($$) = $dims;
+        AddLocToNode($$, &@t, &@5);
+      }
+      | type[t] ID[id]
+      {
+        $$ = ASTparam($id, $t);
         AddLocToNode($$, &@t, &@id);
       }
       ;
@@ -286,8 +284,6 @@ ids: ID
       }
       ;
 
-opt_exprs: exprs { $$ = $1; } | /* Empty */ { $$ = NULL; };
-
 vardecls: vardecl vardecls
         {
           $$ = $1;
@@ -335,8 +331,7 @@ var: ID[id] SBRACKET_L exprs[indices] SBRACKET_R
         }
         ;
 
-exprs: expr exprs { $$ = ASTexprs($1, $2); }  // Does expr exprs even exist?
-     | expr COMMA exprs { $$ = ASTexprs($1, $3); }
+exprs: expr COMMA exprs { $$ = ASTexprs($1, $3); }
      | expr { $$ = ASTexprs($1, NULL); }
      ;
 
@@ -372,7 +367,8 @@ preclvl2: preclvl2 STAR preclvl1 { $$ = ASTbinop($1, $3, BO_mul); AddLocToNode($
         | preclvl1
         ;
 
-preclvl1: MINUS primitive { $$ = ASTmonop($2, MO_neg); AddLocToNode($$, &@1, &@2); };
+preclvl1: MINUS primitive { $$ = ASTmonop($2, MO_neg); AddLocToNode($$, &@1, &@2); }
+        | NOT primitive { $$ = ASTmonop($2, MO_not); AddLocToNode($$, &@1, &@2); }
         | primitive
         ;
 
@@ -419,24 +415,6 @@ boolval: TRUEVAL
            $$ = ASTbool(false);
          }
        ;
-
-monop: NOT       { $$ = MO_not; }
-     | MINUS     { $$ = MO_neg; }
-     ;
-
-binop: PLUS      { $$ = BO_add; }
-     | MINUS     { $$ = BO_sub; }
-     | STAR      { $$ = BO_mul; }
-     | SLASH     { $$ = BO_div; }
-     | PERCENT   { $$ = BO_mod; }
-     | LE        { $$ = BO_le; }
-     | LT        { $$ = BO_lt; }
-     | GE        { $$ = BO_ge; }
-     | GT        { $$ = BO_gt; }
-     | EQ        { $$ = BO_eq; }
-     | OR        { $$ = BO_or; }
-     | AND       { $$ = BO_and; }
-     ;
 
 type: INTTYPE   { $$ = CT_int; }
     | FLOATTYPE { $$ = CT_float; }
