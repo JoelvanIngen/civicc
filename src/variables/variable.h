@@ -1,12 +1,8 @@
-//src/analysis/variable.h
+//src/variables/variable.h
 
 #pragma once
 
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
-
-enum ccn_nodetype;
+#include "common.h"
 
 typedef enum {
     NUM,
@@ -16,41 +12,57 @@ typedef enum {
     NUM_ARRAY,
     FLOAT_ARRAY,
     BOOL_ARRAY,
-} DType;                            // DType to prevent name collision with enum Type
+} VType;                            // ValueType
+
+typedef enum {
+    FN,
+    VAR,
+} NType;                            // NodeType
 
 typedef struct {
-    DType data_t;                   // Data type as defined in ccngen/enum.h
-    enum ccn_nodetype node_t;       // Node type as defined in ccngen/enum.h
+    VType data_t;                   // Data type as defined in ccngen/enum.h
+    NType node_t;                   // Node type as defined in ccngen/enum.h
     union {                         // The actual data
         int64_t num_val;
         double float_val;
         bool bool_val;
         struct {                    // Struct for array type
             void* data;             // Pointer to start of array data
-            size_t elem_size;       // Size of single element, might actually be unneeded but we will see later
             int dim_count;          // Amount of dimensions
             int* dims;              // Dimension sizes
         } array;
     } as;                           // Using `as` as name for union because it reads nicely
 } ScopeValue;
 
-#define IS_NUM(value)       ((value)->data_t == DType::NUM)
-#define IS_FLOAT(value)     ((value)->data_t == DType::FLOAT)
-#define IS_BOOL(value)      ((value)->data_t == DType::BOOL)
-#define IS_VOID(value)      ((value)->data_t == DType::VOID)
-#define IS_NUM_ARRAY(value)     ((value)->data_t == DType::NUM_ARRAY)
-#define IS_FLOAT_ARRAY(value)   ((value)->data_t == DType::FLOAT_ARRAY)
-#define IS_BOOL_ARRAY(value)    ((value)->data_t == DType::BOOL_ARRAY)
+// Type checking macros
+#define IS_NUM(v)           ((v)->data_t == VType::NUM)
+#define IS_FLOAT(v)         ((v)->data_t == VType::FLOAT)
+#define IS_BOOL(v)          ((v)->data_t == VType::BOOL)
+#define IS_VOID(v)          ((v)->data_t == VType::VOID)
+#define IS_NUM_ARRAY(v)     ((v)->data_t == VType::NUM_ARRAY)
+#define IS_FLOAT_ARRAY(v)   ((v)->data_t == VType::FLOAT_ARRAY)
+#define IS_BOOL_ARRAY(v)    ((v)->data_t == VType::BOOL_ARRAY)
+#define IS_ARRAY(v) \
+    (IS_NUM_ARRAY(v) || IS_FLOAT_ARRAY(v) || IS_BOOL_ARRAY(v))
 
-#define IS_ARRAY(value) \
-    (IS_NUM_ARRAY(value) || IS_FLOAT_ARRAY(value) || IS_BOOL_ARRAY(value))
+// Access macros
+#ifdef DEBUGGING
+#define AS_NUM(v)           (assert(IS_NUM(v)), (v)->as.num_val)
+#define AS_FLOAT(v)         (assert(IS_FLOAT(v)), (v)->as.float_val)
+#define AS_BOOL(v)          (assert(IS_BOOL(v)), (v)->as.bool_val)
+#define AS_NUM_ARRAY(v)     (assert(IS_NUM_ARRAY(v)), (int64_t *)((v)->as.array.data))
+#define AS_FLOAT_ARRAY(v)   (assert(IS_FLOAT_ARRAY(v)), (double *)((v)->as.array.data))
+#define AS_BOOL_ARRAY(v)    (assert(IS_BOOL_ARRAY(v)), (bool *)((v)->as.array.data))
+#else // DEBUGGING
+#define AS_NUM(v)           ((v)->as.num_val)
+#define AS_FLOAT(v)         ((v)->as.float_val)
+#define AS_BOOL(v)          ((v)->as.bool_val)
+#define AS_NUM_ARRAY(v)     ((int64_t *)((v)->as.array.data))
+#define AS_FLOAT_ARRAY(v)   ((double *)((v)->as.array.data))
+#define AS_BOOL_ARRAY(v)    ((bool *)((v)->as.array.data))
+#endif // DEBUGGING
 
-#define AS_NUM(value)       ((value)->as.num_val)
-#define AS_FLOAT(value)     ((value)->as.float_val)
-#define AS_BOOL(value)      ((value)->as.bool_val)
-#define AS_NUM_ARRAY(value)     (int64_t *)((value)->as.array.data)
-#define AS_FLOAT_ARRAY(value)   ((double *)((value)->as.array.data))
-#define AS_BOOL_ARRAY(value)    ((bool *)((value)->as.array.data))
-
-ScopeValue* TEcreate();
-void TEdestroy(ScopeValue** sv);
+ScopeValue* SVfromFun(VType vtype);
+ScopeValue* SVfromVar(VType vtype, const void* value);
+ScopeValue* SVfromArray(VType vtype, void* data, int dim_count, int *dims);
+void SVdestroy(ScopeValue** sv);

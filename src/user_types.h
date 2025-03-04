@@ -1,6 +1,7 @@
 #pragma once
 
 #include "palm/hash_table.h"
+#include "variables/vartablestack.h"
 
 typedef htable_st* htable_stptr;
-// Add more types here if necessary
+typedef VarTableStack* vts_ptr;

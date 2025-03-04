@@ -17,7 +17,11 @@ traversal Print {
 };
 
 traversal SyntacticAnalysis {
-    uid = SAN
+    uid = SAN,
+    nodes = { Program,  },
+    travdata {
+        user vts_ptr vartable_stack
+    }
 };
 
 /*****************************************************************************
