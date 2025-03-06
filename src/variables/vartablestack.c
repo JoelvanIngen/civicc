@@ -48,7 +48,7 @@ void VTSpush(VTS* vts) {
             VARTABLE_STACK_SIZE);
     }
 
-    vts->stack[vts->current - 1] = HTnew_String(VARTABLE_SIZE);
+    vts->stack[vts->current] = HTnew_String(VARTABLE_SIZE);
     vts->current++;
 }
 

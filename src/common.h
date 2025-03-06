@@ -9,6 +9,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "palm/memory.h"
+
 #define VARTABLE_STACK_SIZE 10
 #define VARTABLE_SIZE 100
 

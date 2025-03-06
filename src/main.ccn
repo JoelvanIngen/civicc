@@ -8,7 +8,7 @@ start phase RootPhase {
     actions {
         pass SPdoScanParse;
         Print;
-        SyntacticAnalysis;
+        ContextAnalysis;
     }
 };
 
@@ -16,9 +16,8 @@ traversal Print {
     uid = PRT
 };
 
-traversal SyntacticAnalysis {
-    uid = SAN,
-    nodes = { Program,  },
+traversal ContextAnalysis {
+    uid = CTA,
     travdata {
         user vts_ptr vartable_stack
     }

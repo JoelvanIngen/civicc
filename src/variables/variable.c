@@ -5,17 +5,17 @@
 #include "palm/hash_table.h"
 #include "palm/memory.h"
 
-#define SV ScopeValue  // Makes definitions shorter
+typedef ScopeValue SV;
 
 static size_t elem_size(const VType type) {
     switch (type) {
-        case NUM:
-        case NUM_ARRAY: return sizeof(int64_t);
-        case FLOAT:
-        case FLOAT_ARRAY: return sizeof(double);
-        case BOOL:
-        case BOOL_ARRAY: return sizeof(bool);
-        case VOID: return 0;
+        case SV_VT_NUM:
+        case SV_VT_NUM_ARRAY: return sizeof(int64_t);
+        case SV_VT_FLOAT:
+        case SV_VT_FLOAT_ARRAY: return sizeof(double);
+        case SV_VT_BOOL:
+        case SV_VT_BOOL_ARRAY: return sizeof(bool);
+        case SV_VT_VOID: return 0;
         default: return -1; // TODO: ERROR
     }
 }
@@ -24,37 +24,39 @@ static SV* SVcreate() {
     return MEMmalloc(sizeof(SV));
 }
 
-SV* SVfromFun(const VType vtype) {
+SV* SVfromFun(const VType vtype, VType* params, size_t params_len) {
 #ifdef DEBUGGING
-    ASSERT_MSG((vtype == NUM || vtype == FLOAT || vtype == BOOL || vtype == VOID),
+    ASSERT_MSG((vtype == SV_VT_NUM || vtype == SV_VT_FLOAT || vtype == SV_VT_BOOL || vtype == SV_VT_VOID),
         "Function return type (%i) is not num, float, bool or void", vtype);
 #endif // DEBUGGING
     ScopeValue* sv = SVcreate();
     sv->data_t = vtype;
-    sv->node_t = FN;
+    sv->node_t = SV_NT_FN;
+    sv->as.array.data = params;
+    sv->as.array.dim_count = params_len;
     return sv;
 }
 
 SV* SVfromVar(const VType vtype, const void* value) {
 #ifdef DEBUGGING
-    ASSERT_MSG((vtype == NUM || vtype == FLOAT || vtype == BOOL),
+    ASSERT_MSG((vtype == SV_VT_NUM || vtype == SV_VT_FLOAT || vtype == SV_VT_BOOL),
         "Var type (%i) is not num, float or bool", vtype);
 #endif // DEBUGGING
     ScopeValue* sv = SVcreate();
     sv->data_t = vtype;
-    sv->node_t = VAR;
+    sv->node_t = SV_NT_VAR;
     memcpy(&sv->as, value, elem_size(vtype));
     return sv;
 }
 
 SV* SVfromArray(const VType vtype, void* data, const int dim_count, int *dims) {
 #ifdef DEBUGGING
-    ASSERT_MSG((vtype == NUM_ARRAY || vtype == FLOAT_ARRAY || vtype == BOOL_ARRAY),
+    ASSERT_MSG((vtype == SV_VT_NUM_ARRAY || vtype == SV_VT_FLOAT_ARRAY || vtype == SV_VT_BOOL_ARRAY),
         "Array type (%i) is not num, float or bool", vtype);
 #endif // DEBUGGING
     ScopeValue* sv = SVcreate();
     sv->data_t = vtype;
-    sv->node_t = VAR;
+    sv->node_t = SV_NT_VAR;
     sv->as.array.data = data;
     sv->as.array.dim_count = dim_count;
     sv->as.array.dims = dims;
@@ -66,9 +68,9 @@ void SVdestroy(SV** sv) {
     ASSERT_MSG((sv != NULL && *sv != NULL), "Invalid double pointer to SV in SVdestroy");
 #endif // DEBUGGING
     switch ((*sv)->data_t) {
-        case NUM_ARRAY:
-        case FLOAT_ARRAY:
-        case BOOL_ARRAY:
+        case SV_VT_NUM_ARRAY:
+        case SV_VT_FLOAT_ARRAY:
+        case SV_VT_BOOL_ARRAY:
             MEMfree((*sv)->as.array.data);
             MEMfree((*sv)->as.array.dims);
             break;
