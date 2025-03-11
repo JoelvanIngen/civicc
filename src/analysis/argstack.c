@@ -1,0 +1,92 @@
+// src/variables/paramstack.c
+
+#include "argstack.h"
+
+#include "common.h"
+
+#define INITIAL_SIZE 10
+
+typedef ArgListStack ALS;
+typedef ArgList AL;
+
+static void checkResizeAL(AL* al) {
+    if (al->ptr + 1 >= al->size) {
+        al->size = al->size * 2;
+        al->args = MEMrealloc(al->args, al->size * sizeof(Argument));
+    }
+}
+
+static void checkResizeALS(ALS* als) {
+    if (als->ptr + 1 >= als->size) {
+        als->size = als->size * 2;
+        als->fun_calls = MEMrealloc(als->fun_calls, als->size * sizeof(Argument));
+    }
+}
+
+static AL* ALinit(AL* al) {
+    al->ptr = 0;
+    al->size = INITIAL_SIZE;
+    al->args = MEMmalloc(al->size * sizeof(Argument));
+    return al;
+}
+
+static void ALfree(AL* al) {
+    free(al->args);
+    free(al);
+}
+
+void ALadd(AL* al, const char* name, const ValueType type) {
+    checkResizeAL(al);
+    al->args[al->ptr].type = type;
+    al->args[al->ptr].name = name;
+    al->ptr++;
+}
+
+/** Creates a new parameter list stack */
+ALS* ALSnew() {
+    ALS* als = MEMmalloc(sizeof(ALS));
+    als->ptr = 0;
+    als->size = INITIAL_SIZE;
+    als->fun_calls = MEMmalloc(als->size * sizeof(AL));
+    return als;
+}
+
+/** Frees a parameter list stack */
+void ALSfree(ALS** als) {
+    // Free all internal lists
+    for (size_t i = 0; i < (*als)->ptr; i++) {
+        ALfree(&(*als)->fun_calls[i]);
+    }
+
+    // Free self
+    MEMfree(*als);
+    *als = NULL;
+}
+
+/** Starts a new funcall */
+void ALSpush(ALS* als) {
+    checkResizeALS(als);
+    ALinit(&als->fun_calls[als->ptr]);
+    als->ptr++;
+}
+
+/** Ends a funcall and discards list */
+void ALSpop(ALS* als) {
+    als->ptr--;
+    ALfree(&als->fun_calls[als->ptr]);
+}
+
+/** Adds a new parameter on the current funcall */
+void ALSadd(ALS* als, const char* name, const ValueType type) {
+    ALadd(&als->fun_calls[als->ptr - 1], name, type);
+}
+
+/** Points to the first argument of the current scope */
+Argument* ALSgetCurrentArgs(const ALS* als) {
+    return als->fun_calls[als->ptr - 1].args;
+}
+
+/** Returns the length of the current scope (upper bound exclusive) */
+size_t ALSgetCurrentLength(const ALS* als) {
+    return als->fun_calls[als->ptr - 1].ptr;
+}

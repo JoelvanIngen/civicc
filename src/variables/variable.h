@@ -4,7 +4,7 @@
 
 #include "common.h"
 
-#include "paramstack.h"
+#include "../analysis/argstack.h"
 
 typedef enum {
     SV_VT_NUM,

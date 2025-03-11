@@ -51,23 +51,23 @@ int yycolumn = 1;
 ";"                        { FILTER(SEMICOLON); }
 
 "-"                        { FILTER(MINUS); }
-"+"                        { FILTER(PLUS);  }
-"*"                        { FILTER(STAR);  }
-"/"                        { FILTER(SLASH);  }
-"%"                        { FILTER(PERCENT);  }
+"+"                        { FILTER(PLUS); }
+"*"                        { FILTER(STAR); }
+"/"                        { FILTER(SLASH); }
+"%"                        { FILTER(PERCENT); }
 
-"<="                       { FILTER(LE);    }
-"<"                        { FILTER(LT);    }
-">="                       { FILTER(GE);    }
-">"                        { FILTER(GT);    }
-"=="                       { FILTER(EQ);    }
-"!="                       { FILTER(NE);    }
-"&&"                       { FILTER(AND);    }
-"||"                       { FILTER(OR);    }
+"<="                       { FILTER(LE); }
+"<"                        { FILTER(LT); }
+">="                       { FILTER(GE); }
+">"                        { FILTER(GT); }
+"=="                       { FILTER(EQ); }
+"!="                       { FILTER(NE); }
+"&&"                       { FILTER(AND); }
+"||"                       { FILTER(OR); }
 
 "!"                        { FILTER(NOT); }
 
-"="                        { FILTER(LET);    }
+"="                        { FILTER(LET); }
 
 "int"                      { FILTER(INTTYPE); }
 "float"                    { FILTER(FLOATTYPE); }
@@ -77,15 +77,15 @@ int yycolumn = 1;
 "true"                     { FILTER(TRUEVAL); }
 "false"                    { FILTER(FALSEVAL); }
 
-"if"                       { FILTER(IF)}
-"else"                     { FILTER(ELSE)}
-"while"                    { FILTER(WHILE)}
-"do"                       { FILTER(DO)}
-"for"                      { FILTER(FOR)}
-"return"                   { FILTER(RETURN)}
+"if"                       { FILTER(IF); }
+"else"                     { FILTER(ELSE); }
+"while"                    { FILTER(WHILE); }
+"do"                       { FILTER(DO); }
+"for"                      { FILTER(FOR); }
+"return"                   { FILTER(RETURN); }
 
-"export"                   { FILTER(EXPORT)}
-"extern"                   { FILTER(EXTERN)}
+"export"                   { FILTER(EXPORT); }
+"extern"                   { FILTER(EXTERN); }
 
 "//".*                     {  } // Skip single-line comments
 "/*"                       { BEGIN(COMMENT); }

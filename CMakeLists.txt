@@ -37,8 +37,16 @@ add_executable(civicc ${FLEX_CivicLexer_OUTPUTS} ${BISON_CivicParser_OUTPUTS}
         src/variables/vartablestack.c
         src/variables/vartablestack.h
         src/common.h
-        src/variables/paramstack.c
-        src/variables/paramstack.h
+        src/analysis/argstack.c
+        src/analysis/argstack.h
+        src/symbol/symbol.c
+        src/symbol/symbol.h
+        src/symbol/table.c
+        src/symbol/table.h
+        src/symbol/tablestack.c
+        src/symbol/tablestack.h
+        src/analysis/idlist.c
+        src/analysis/idlist.h
 )
 
 target_compile_options(civicc PRIVATE

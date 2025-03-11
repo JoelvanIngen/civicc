@@ -9,10 +9,12 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "palm/hash_table.h"
 #include "palm/memory.h"
 
 #define VARTABLE_STACK_SIZE 10
 #define VARTABLE_SIZE 100
+#define INITIAL_LIST_SIZE 5
 
 #define DEBUGGING true
 
@@ -35,3 +37,5 @@
     fprintf(stderr, "\n"); \
     exit(1); \
 } while (false)
+
+#define ARRAY_RESIZE(arr, new_size) (arr = MEMrealloc(arr, (new_size) * sizeof(*(arr))))

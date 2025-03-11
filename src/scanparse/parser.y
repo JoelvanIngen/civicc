@@ -52,8 +52,7 @@ void AddLocToNode(node_st *node, void *begin_loc, void *end_loc);
 %type <node> intval floatval boolval
 %type <ctype> type
 %type <node> constants decl stmt
-
-// type <node> operations cast arrexpr 
+%type <node> operations castexpr arrexpr 
 
 %type <node> opt_vardecls opt_fundefs opt_stmts opt_expr_indices
 %type <node> opt_params param_list
@@ -103,6 +102,14 @@ globdecl: EXTERN type[t] ids[dims] ID[name] SEMICOLON
 globdef: opt_export_bool[export] type[t] ID[name] LET expr[init] SEMICOLON
         {
           $$ = ASTglobdef($name, $t);
+          GLOBDEF_INIT($$) = $init;
+          GLOBDEF_EXPORT($$) = $export;
+          AddLocToNode($$, &@t, &@init);
+        }
+       | opt_export_bool[export] type[t] SBRACKET_L exprs[dims] SBRACKET_R ID[name] LET expr[init] SEMICOLON
+        {
+          $$ = ASTglobdef($name, $t);
+          GLOBDEF_DIMS($$) = $dims;
           GLOBDEF_INIT($$) = $init;
           GLOBDEF_EXPORT($$) = $export;
           AddLocToNode($$, &@t, &@init);
@@ -264,6 +271,22 @@ funcall:  ID[name] BRACKET_L exprs[args] BRACKET_R
         }
         ;
 
+castexpr: BRACKET_L type[t] BRACKET_R expr[e]
+        {
+          $$ = ASTcast($e, $t);
+        }
+        ;
+
+arrexpr: SBRACKET_L exprs SBRACKET_R
+        {
+          $$ = ASTarrexpr($2);
+        }
+        | exprs  // Allows setting all values to single scalar
+        {
+          $$ = ASTarrexpr($1);
+        }
+        ;
+
 ids: ID
       {
         $$ = ASTids($1);
@@ -330,7 +353,8 @@ exprs: expr COMMA exprs { $$ = ASTexprs($1, $3); }
 
 /* EXPRESSIONS AND PRECEDENCE */
 
-expr: preclvl6;
+expr: preclvl6
+    | arrexpr;
 
 preclvl6: preclvl6 OR preclvl5 { $$ = ASTbinop($1, $3, BO_or); AddLocToNode($$, &@1, &@3); }
         | preclvl5
@@ -368,6 +392,7 @@ preclvl1: MINUS primitive { $$ = ASTmonop($2, MO_neg); AddLocToNode($$, &@1, &@2
 primitive: constants
          | var
          | funcall
+         | castexpr
          | BRACKET_L expr BRACKET_R { $$ = $2; }
          ;
 
