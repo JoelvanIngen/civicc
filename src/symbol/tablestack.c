@@ -5,9 +5,6 @@
 typedef SymbolTableStack STS;
 
 static SymbolTable* top(const STS* sts) {
-#ifdef DEBUGGING
-    ASSERT_MSG((sts->ptr - 1 >= 0), "Trying to lookup index %lu", sts->ptr);
-#endif // DEBUGGING
     return sts->tables[sts->ptr - 1];
 }
 
