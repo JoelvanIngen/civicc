@@ -287,22 +287,6 @@ funcall:  ID[name] BRACKET_L exprs[args] BRACKET_R
         }
         ;
 
-// castexpr: BRACKET_L type[t] BRACKET_R expr[e]
-//         {
-//           $$ = ASTcast($e, $t);
-//         }
-//         ;
-
-// arrexpr: SBRACKET_L exprs SBRACKET_R
-//         {
-//           $$ = ASTarrexpr($2);
-//         }
-//         | expr  // Allows setting all values to single scalar
-//         {
-//           $$ = ASTarrexpr(ASTexprs($1));
-//         }
-//         ;
-
 ids: ID
       {
         $$ = ASTids($1);
