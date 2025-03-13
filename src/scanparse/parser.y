@@ -133,7 +133,7 @@ stmts: stmt stmts
         }
       | %empty
         {
-          $$ = NULL
+          $$ = NULL;
         }
         ;
 
@@ -357,7 +357,7 @@ expr: constants
     | BRACKET_L expr[e] BRACKET_R { $$ = $e; }
     | SBRACKET_L exprs[es] SBRACKET_R { $$ = ASTarrexpr($es); }
     | BRACKET_L type[t] BRACKET_R expr[e] %prec CAST { $$ = ASTcast($e, $t); }
-    | expr[left] OR expr[right] { $$ = ASTbinop($1, $3, BO_or); AddLocToNode($$, &@1prec, &@3); }
+    | expr[left] OR expr[right] { $$ = ASTbinop($1, $3, BO_or); AddLocToNode($$, &@1, &@3); }
     | expr[left] AND expr[right] { $$ = ASTbinop($1, $3, BO_and); AddLocToNode($$, &@1, &@3); }
     | expr[left] EQ expr[right] { $$ = ASTbinop($1, $3, BO_eq); AddLocToNode($$, &@1, &@3); }
     | expr[left] NE expr[right] { $$ = ASTbinop($1, $3, BO_ne); AddLocToNode($$, &@1, &@3); }

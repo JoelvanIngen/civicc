@@ -50,22 +50,24 @@ void SBfree(Symbol** s) {
     *s = NULL;
 }
 
-void SBaddDim(Symbol* s, const size_t dim) {
+void SBaddDim(Symbol* s, size_t dim) {
 #ifdef DEBUGGING
-    ASSERT_MSG((s->stype == ST_ARRAYVAR), "Tried to add dimension for non-array symbol");
+    // TODO: Fix macro to not need varglist
+    ASSERT_MSG((s->stype == ST_ARRAYVAR), "Tried to add dimension for non-array symbol%s", "");
 #endif
     if (s->as.array.dim_count + 1 >= s->as.array.capacity) {
         s->as.array.capacity *= 2;
         s->as.array.dims = MEMrealloc(s->as.array.dims, s->as.array.capacity * sizeof(size_t));
     }
 
-    s->as.array.dims[s->as.array.dim_count] = dim;
+    *s->as.array.dims[s->as.array.dim_count] = dim;
     s->as.array.dim_count++;
 }
 
-void SBaddParam(Symbol* s, const ValueType vt) {
+void SBaddParam(Symbol* s, ValueType const vt) {
 #ifdef DEBUGGING
-    ASSERT_MSG((s->stype == ST_FUNCTION), "Tried to add parameter for non-function symbol");
+    // TODO: Fix macro to not need varglist
+    ASSERT_MSG((s->stype == ST_FUNCTION), "Tried to add parameter for non-function symbol%s", "");
 #endif
     if (s->as.fun.param_count + 1 >= s->as.fun.capacity) {
         s->as.fun.capacity *= 2;

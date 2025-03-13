@@ -10,9 +10,10 @@ IdList* IDLnew() {
     return idl;
 }
 
+// Does NOT free the ID array, since it is meant to be re-assigned
+// to different, existing struct
 void IDLfree(IdList** idl_ptr) {
     IdList* idl = *idl_ptr;
-    MEMfree(idl->ids);
     MEMfree(idl);
     *idl_ptr = NULL;
 }

@@ -5,6 +5,9 @@
 typedef SymbolTableStack STS;
 
 static SymbolTable* top(const STS* sts) {
+#ifdef DEBUGGING
+    ASSERT_MSG((sts->ptr - 1 >= 0), "Trying to lookup index %lu", sts->ptr);
+#endif // DEBUGGING
     return sts->tables[sts->ptr - 1];
 }
 
@@ -30,7 +33,7 @@ void STSfree(STS** sts_ptr) {
     STS* sts = *sts_ptr;
 
     while (sts->ptr > 0) {
-        STfree(STSpop);
+        STSpop(sts);
     }
 
     sts->ptr = 0;
@@ -40,18 +43,18 @@ void STSfree(STS** sts_ptr) {
     *sts_ptr = NULL;
 }
 
-void STSpush(STS* sts, const char* scope_name, const ValueType ret_type) {
+void STSpush(STS* sts, char* scope_name, const ValueType ret_type) {
     if (sts->ptr >= sts->capacity) {
         sts->capacity *= 2;
         sts->tables = MEMrealloc(sts->tables, sts->capacity * sizeof(SymbolTable*));
     }
 
-    sts->tables[sts->ptr - 1] = STnew(scope_name, ret_type);
+    sts->tables[sts->ptr] = STnew(scope_name, ret_type);
     sts->ptr++;
 }
 
 Symbol* STSlookup(const STS* sts, char* symbol_name) {
-    for (size_t height = sts->ptr - 1; height > 0; height++) {
+    for (long height = (long) sts->ptr - 1; height >= 0; height--) {
         const SymbolTable* st = peek(sts, height);
         Symbol* s = STlookup(st, symbol_name);
         if (s != NULL) {

@@ -17,10 +17,7 @@ traversal Print {
 };
 
 traversal ContextAnalysis {
-    uid = CTA,
-    travdata {
-        user vts_ptr vartable_stack
-    }
+    uid = CTA
 };
 
 /*****************************************************************************

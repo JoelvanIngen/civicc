@@ -14,9 +14,10 @@
 #include "common.h"
 #include "idlist.h"
 #include "argstack.h"
+#include "dimsliststack.h"
 #include "symbol/tablestack.h"
 
-#define IS_ARITH_TYPE(vt) (vt == VT_NUM || vt == VT_FLOAT)  // TODO
+#define IS_ARITH_TYPE(vt) (vt == VT_NUM || vt == VT_FLOAT)
 
 typedef enum {
     DECLARATION_PASS,
@@ -32,20 +33,20 @@ SymbolTableStack* STS;
 // Stacking nested function calls
 ArgListStack* ALS;
 
+// Stacking nested array indexing
+DimsListStack* DLS;
+
 // Listing parameter dimensions
 IdList* IDL = NULL;
 
 void CTAinit() {
-    // Initialise symbol table stack
-    STS = STSnew();
-
-    // Initialise funcall argument stack
-    ALS = ALSnew();
+    return;
 }
 void CTAfini() {
     // Free functions also delete any leftovers, we don't worry about cleaning up
     STSfree(&STS);
     ALSfree(&ALS);
+    DLSfree(&DLS);
 }
 
 ValueType valuetype_from_nt(const enum Type ct_type, const bool is_array) {
@@ -71,6 +72,15 @@ ValueType valuetype_from_nt(const enum Type ct_type, const bool is_array) {
  */
 node_st *CTAprogram(node_st *node)
 {
+    // Initialise symbol table stack
+    STS = STSnew();
+
+    // Initialise funcall argument stack
+    ALS = ALSnew();
+
+    // Initialise dimension stack
+    DLS = DLSnew();
+
     // Create global scope, with void return type (will never be used anyway)
     STSpush(STS, NULL, VT_VOID);
 
@@ -195,10 +205,10 @@ node_st *CTAfuncall(node_st *node)
             args_len, FUNCALL_NAME(node), params_len);
     }
 
-    for (int i = 0; i < params_len; i++) {
+    for (size_t i = 0; i < params_len; i++) {
         if (args->type != param_types[i]) {
             // TODO: Make more descriptive when we have enum to string function
-            USER_ERROR("Argument type and parameter type don't match");
+            USER_ERROR("Argument type %i and parameter type %i don't match", args->type, param_types[i]);
         }
 
         // TODO: Compare array dimensions
@@ -349,7 +359,17 @@ node_st *CTAglobdecl(node_st *node)
     Symbol* s = SBfromVar(name, type);
     STSadd(STS, name, s);
 
+    // TODO: Not actually save to array.dims but assign to variables
+    // Create IdList to traverse dimensions
+    // IDL = IDLnew();
     TRAVchildren(node);
+
+    // s->as.array.dim_count = IDL->size;
+    // s->as.array.dims = IDL->ids;
+
+    // // Clean up, except for dims list
+    // IDLfree(&IDL);
+
     return node;
 }
 
@@ -369,7 +389,23 @@ node_st *CTAglobdef(node_st *node)
     Symbol* s = SBfromVar(name, type);
     STSadd(STS, name, s);
 
-    TRAVchildren(node);
+    // Create new entry on indexing stack
+    DLSpush(DLS);
+
+    // TODO: activate and deactivate saving to DLS based on global parameter
+    // SAVE_DIMS = true;
+    TRAVdims(node);
+    // SAVE_DIMS = false;
+
+    // Save information to array symbol
+    DimsList* dml = DLSpeekTop(DLS);
+    s->as.array.dim_count = dml->size;
+    s->as.array.dims = dml->dims;
+
+    // Clean up, except for dims list
+    DMLfree(&dml);
+
+    TRAVinit(node);
     return node;
 }
 
@@ -415,7 +451,24 @@ node_st *CTAvardecl(node_st *node)
     Symbol* s = SBfromVar(name, type);
     STSadd(STS, name, s);
 
-    TRAVchildren(node);
+    // Create new entry on indexing stack
+    DLSpush(DLS);
+
+    // TODO: activate and deactivate saving to DLS based on global parameter
+    // SAVE_DIMS = true;
+    TRAVdims(node);
+    // SAVE_DIMS = false;
+
+    // Save information to array symbol
+    DimsList* dml = DLSpeekTop(DLS);
+    s->as.array.dim_count = dml->size;
+    s->as.array.dims = dml->dims;
+
+    // Clean up, except for dims list
+    DMLfree(&dml);
+
+    TRAVinit(node);
+    TRAVnext(node);
     return node;
 }
 
@@ -513,8 +566,10 @@ node_st *CTAmonop(node_st *node)
             // TODO: Create enum-to-str function to better print errors instead of enum values
             USER_ERROR("Expected operand type Bool, got %i instead", last_type);
         }
+        break;
         default: /* Should never occur */
-            USER_ERROR("Unexpected error comparing monop type and expected type");
+            // TODO: Fix macro such that string without format can parse
+            USER_ERROR("Unexpected error comparing monop type %i and expected type %i", 0, 1);
     }
 
     return node;
@@ -527,10 +582,8 @@ node_st *CTAvarlet(node_st *node)
 {
     // TODO: Add array support
 
-    TRAVchildren(node);
-
     // Look up variable
-    const Symbol* s = STSlookup(STS, VAR_NAME(node));
+    Symbol* s = STSlookup(STS, VAR_NAME(node));
     if (s == NULL) {
         // TODO: Show error that variable doesn't exist
         // Exit for now to prevent IDE warnings
@@ -538,6 +591,23 @@ node_st *CTAvarlet(node_st *node)
     }
 
     last_type = s->vtype;
+
+    // Create new entry on indexing stack
+    DLSpush(DLS);
+
+    // TODO: activate and deactivate saving to DLS based on global parameter
+    // SAVE_DIMS = true;
+    TRAVdims(node);
+    // SAVE_DIMS = false;
+
+    // Save information to array symbol
+    DimsList* dml = DLSpeekTop(DLS);
+    s->as.array.dim_count = dml->size;
+    s->as.array.dims = dml->dims;
+
+    // Clean up, except for dims list
+    DMLfree(&dml);
+
     return node;
 }
 
@@ -548,10 +618,8 @@ node_st *CTAvar(node_st *node)
 {
     // TODO: Add array support
 
-    TRAVchildren(node);
-
     // Look up variable
-    const Symbol* s = STSlookup(STS, VAR_NAME(node));
+    Symbol* s = STSlookup(STS, VAR_NAME(node));
     if (s == NULL) {
         // TODO: Show error that variable doesn't exist
         // Exit for now to prevent IDE warnings
@@ -559,6 +627,23 @@ node_st *CTAvar(node_st *node)
     }
 
     last_type = s->vtype;
+
+    // Create new entry on indexing stack
+    DLSpush(DLS);
+
+    // TODO: activate and deactivate saving to DLS based on global parameter
+    // SAVE_DIMS = true;
+    TRAVdims(node);
+    // SAVE_DIMS = false;
+
+    // Save information to array symbol
+    DimsList* dml = DLSpeekTop(DLS);
+    s->as.array.dim_count = dml->size;
+    s->as.array.dims = dml->dims;
+
+    // Clean up, except for dims list
+    DMLfree(&dml);
+
     return node;
 }
 

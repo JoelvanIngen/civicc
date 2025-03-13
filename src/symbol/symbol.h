@@ -23,7 +23,7 @@ typedef enum {
 typedef struct {
     size_t dim_count;
     size_t capacity;
-    size_t* dims;
+    size_t** dims;
 } ArrayData;
 
 typedef struct {
