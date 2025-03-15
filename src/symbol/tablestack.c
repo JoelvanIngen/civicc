@@ -73,3 +73,8 @@ void STSadd(const STS* sts, char* symbol_name, Symbol* sym) {
 char* STScurrentScopeName(const STS* sts) {
     return top(sts)->name;
 }
+
+Symbol* STSlookupInTop(const SymbolTableStack* sts, char* symbol_name) {
+    const SymbolTable* st = top(sts);
+    return STlookup(st, symbol_name);
+}

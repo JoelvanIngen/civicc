@@ -42,15 +42,13 @@ IdList* IDL = NULL;
 // Keeps track of whether we had an error during analysis
 bool HAD_ERROR = false;
 
-void CTAinit() {
-    return;
-}
-void CTAfini() {
-    // Free functions also delete any leftovers, we don't worry about cleaning up
-    STSfree(&STS);
-    ALSfree(&ALS);
-    DLSfree(&DLS);
-}
+// Short for printing error on duplicate identifier name and immediately returning
+#define HANDLE_DUPLICATE_ID(name) do { \
+    if (name_exists_in_top_scope(name)) { \
+        USER_ERROR("Variable '%s' is already declared", name); \
+        return node; \
+    } \
+} while (false)
 
 ValueType valuetype_from_nt(const enum Type ct_type, const bool is_array) {
     switch (ct_type) {
@@ -63,7 +61,7 @@ ValueType valuetype_from_nt(const enum Type ct_type, const bool is_array) {
                 printf("Type error: cannot have a void array\n");
                 exit(1);
             }
-            return VT_VOID;
+        return VT_VOID;
         default:
             printf("Type error: unexpected ct_type %i\n", ct_type);
         exit(1);
@@ -75,6 +73,20 @@ static void exit_if_error() {
         USER_ERROR("One or multiple errors occurred, exiting...");
         exit(1);
     }
+}
+
+static bool name_exists_in_top_scope(char* name) {
+    return STSlookup(STS, name) != NULL;
+}
+
+void CTAinit() {
+    return;
+}
+void CTAfini() {
+    // Free functions also delete any leftovers, we don't worry about cleaning up
+    STSfree(&STS);
+    ALSfree(&ALS);
+    DLSfree(&DLS);
 }
 
 /**
@@ -367,12 +379,11 @@ node_st *CTAfor(node_st *node)
  */
 node_st *CTAglobdecl(node_st *node)
 {
-    // Add self to vartable of current scope
-    // TODO: Find out if multiple similarly named variables overwrite the old one
-    // TODO continuation: Otherwise display error here instead
-    // TODO: Add array support
-
     char* name = GLOBDECL_NAME(node);
+
+    HANDLE_DUPLICATE_ID(name);
+
+    // Add self to vartable of current scope
     const ValueType type = valuetype_from_nt(GLOBDECL_TYPE(node), false);
 
     Symbol* s = SBfromVar(name, type);
@@ -397,12 +408,13 @@ node_st *CTAglobdecl(node_st *node)
  */
 node_st *CTAglobdef(node_st *node)
 {
-    // Add self to vartable of current scope
-    // TODO: Find out if multiple similarly named variables overwrite the old one
-    // TODO continuation: Otherwise display error here instead
     // TODO: Add array support
 
     char* name = GLOBDEF_NAME(node);
+
+    HANDLE_DUPLICATE_ID(name);
+
+    // Add self to vartable of current scope
     const ValueType type = valuetype_from_nt(GLOBDEF_TYPE(node), false);
 
     Symbol* s = SBfromVar(name, type);
@@ -433,12 +445,13 @@ node_st *CTAglobdef(node_st *node)
  */
 node_st *CTAparam(node_st *node)
 {
-    // Add self to vartable of current scope
-    // TODO: Find out if multiple similarly named variables overwrite the old one
-    // TODO continuation: Otherwise display error here instead
     // TODO: Add array support
 
     char* param_name = PARAM_NAME(node);
+
+    HANDLE_DUPLICATE_ID(param_name);
+
+    // Add self to vartable of current scope
     const ValueType param_type = valuetype_from_nt(PARAM_TYPE(node), false);
 
     // Add parameter as variable to scope
@@ -459,12 +472,13 @@ node_st *CTAparam(node_st *node)
  */
 node_st *CTAvardecl(node_st *node)
 {
-    // Add self to vartable of current scope
-    // TODO: Find out if multiple similarly named variables overwrite the old one
-    // TODO continuation: Otherwise display error here instead
     // TODO: Add array support
 
     char* name = VARDECL_NAME(node);
+
+    HANDLE_DUPLICATE_ID(name);
+
+    // Add self to vartable of current scope
     const ValueType type = valuetype_from_nt(VARDECL_TYPE(node), false);
 
     Symbol* s = SBfromVar(name, type);

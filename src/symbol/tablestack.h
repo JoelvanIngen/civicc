@@ -18,3 +18,4 @@ void STSpush(SymbolTableStack* sts, char* scope_name, ValueType ret_type);
 Symbol* STSlookup(const SymbolTableStack* sts, char* symbol_name);
 void STSadd(const SymbolTableStack* sts, char* symbol_name, Symbol* sym);
 char* STScurrentScopeName(const SymbolTableStack* sts);
+Symbol* STSlookupInTop(const SymbolTableStack* sts, char* symbol_name);
