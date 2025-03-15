@@ -257,7 +257,7 @@ node_st *CTAfuncall(node_st *node)
         // TODO: Compare array dimensions
     }
 
-    // Remove function call from argstack
+    // Remove function call from stack
     ALSpop(ALS);
 
     // Last type is function return type
