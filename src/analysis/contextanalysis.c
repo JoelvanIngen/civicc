@@ -683,14 +683,15 @@ node_st *CTAmonop(node_st *node)
     // Confirm type is correct
     switch (MONOP_OP(node)) {
         // TODO: Find out if negated bool switches values (probably not)
-        case MO_neg: if (!(last_type == VT_NUM || last_type == VT_FLOAT)) {
-            USER_ERROR("Expected operand type Int or Float, got %s instead", vt_to_string(last_type));
-        }
-        break;
+        case MO_neg:
+            if (!(last_type == VT_NUM || last_type == VT_FLOAT)) {
+                USER_ERROR("Expected operand type Int or Float, got %s instead", vt_to_string(last_type));
+            }
+            break;
         case MO_not: if (last_type != VT_BOOL) {
-            USER_ERROR("Expected operand type Bool, got %s instead", vt_to_string(last_type));
-        }
-        break;
+                USER_ERROR("Expected operand type Bool, got %s instead", vt_to_string(last_type));
+            }
+            break;
         default: /* Should never occur */
             USER_ERROR("Unexpected error comparing monop type and expected type");
     }
