@@ -250,7 +250,7 @@ dowhilestmt: DO BRACE_L stmts[block] BRACE_R WHILE BRACKET_L expr[cond] BRACKET_
             }
           ;
 
-forstmt: FOR BRACKET_L ID[var] LET expr[init] COMMA expr[stop] COMMA expr[step] BRACKET_R BRACE_L stmts[block] BRACE_R
+forstmt: FOR BRACKET_L INTTYPE ID[var] LET expr[init] COMMA expr[stop] COMMA expr[step] BRACKET_R BRACE_L stmts[block] BRACE_R
            {
              $$ = ASTfor($init, $stop);
              FOR_STEP($$) = $step;
