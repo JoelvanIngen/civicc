@@ -597,7 +597,7 @@ node_st *CTAvarlet(node_st *node)
     // TODO: Add array support
 
     // Look up variable
-    Symbol* s = STSlookup(STS, VAR_NAME(node));
+    Symbol* s = STSlookup(STS, VARLET_NAME(node));
     if (s == NULL) {
         // TODO: Show error that variable doesn't exist
         // Exit for now to prevent IDE warnings
