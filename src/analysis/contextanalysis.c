@@ -17,8 +17,6 @@
 #include "dimsliststack.h"
 #include "symbol/tablestack.h"
 
-#define IS_ARITH_TYPE(vt) (vt == VT_NUM || vt == VT_FLOAT)
-
 typedef enum {
     DECLARATION_PASS,
     ANALYSIS_PASS,
@@ -41,6 +39,8 @@ IdList* IDL = NULL;
 
 // Keeps track of whether we had an error during analysis
 bool HAD_ERROR = false;
+
+#define IS_ARITH_TYPE(vt) (vt == VT_NUM || vt == VT_FLOAT)
 
 // Short for printing error on duplicate identifier name and immediately returning
 #define HANDLE_DUPLICATE_ID(name) do { \
