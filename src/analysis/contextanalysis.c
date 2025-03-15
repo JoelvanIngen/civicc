@@ -346,14 +346,19 @@ node_st *CTAdowhile(node_st *node)
  */
 node_st *CTAfor(node_st *node)
 {
-    // TODO: Find out if multiple similarly named variables overwrite the old one
-    // TODO continuation: Otherwise display error here instead
+    // Create new scope to ensure proper handling of loop variable
+    STSpush(STS, NULL, VT_VOID);
+
     char* name = FOR_VAR(node);
 
     Symbol* s = SBfromVar(name, VT_NUM);
     STSadd(STS, name, s);
 
     TRAVchildren(node);
+
+    // Discard scope
+    STSpop(STS);
+
     return node;
 }
 
