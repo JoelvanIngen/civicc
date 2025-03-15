@@ -39,6 +39,9 @@ DimsListStack* DLS;
 // Listing parameter dimensions
 IdList* IDL = NULL;
 
+// Keeps track of whether we had an error during analysis
+bool HAD_ERROR = false;
+
 void CTAinit() {
     return;
 }
@@ -63,6 +66,13 @@ ValueType valuetype_from_nt(const enum Type ct_type, const bool is_array) {
             return VT_VOID;
         default:
             printf("Type error: unexpected ct_type %i\n", ct_type);
+        exit(1);
+    }
+}
+
+static void exit_if_error() {
+    if (HAD_ERROR) {
+        USER_ERROR("One or multiple errors occurred, exiting...");
         exit(1);
     }
 }
@@ -96,6 +106,9 @@ node_st *CTAprogram(node_st *node)
     PASS = ANALYSIS_PASS;
     TRAVchildren(node);
 
+    // If we had an error, exit
+    exit_if_error();
+
     return node;
 }
 
@@ -104,6 +117,7 @@ node_st *CTAprogram(node_st *node)
  */
 node_st *CTAdecls(node_st *node)
 {
+    // Reset error flag
     TRAVchildren(node);
     return node;
 }

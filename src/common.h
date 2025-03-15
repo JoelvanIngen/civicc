@@ -35,7 +35,6 @@
     fprintf(stderr, "ERROR: "); \
     fprintf(stderr, fmt, ##__VA_ARGS__); \
     fprintf(stderr, "\n"); \
-    exit(1); \
 } while (false)
 
 #define ARRAY_RESIZE(arr, new_size) (arr = MEMrealloc(arr, (new_size) * sizeof(*(arr))))
