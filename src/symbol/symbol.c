@@ -52,8 +52,7 @@ void SBfree(Symbol** s) {
 
 void SBaddDim(Symbol* s, size_t dim) {
 #ifdef DEBUGGING
-    // TODO: Fix macro to not need varglist
-    ASSERT_MSG((s->stype == ST_ARRAYVAR), "Tried to add dimension for non-array symbol%s", "");
+    ASSERT_MSG((s->stype == ST_ARRAYVAR), "Tried to add dimension for non-array symbol");
 #endif
     if (s->as.array.dim_count + 1 >= s->as.array.capacity) {
         s->as.array.capacity *= 2;
@@ -66,8 +65,7 @@ void SBaddDim(Symbol* s, size_t dim) {
 
 void SBaddParam(Symbol* s, ValueType const vt) {
 #ifdef DEBUGGING
-    // TODO: Fix macro to not need varglist
-    ASSERT_MSG((s->stype == ST_FUNCTION), "Tried to add parameter for non-function symbol%s", "");
+    ASSERT_MSG((s->stype == ST_FUNCTION), "Tried to add parameter for non-function symbol");
 #endif
     if (s->as.fun.param_count + 1 >= s->as.fun.capacity) {
         s->as.fun.capacity *= 2;

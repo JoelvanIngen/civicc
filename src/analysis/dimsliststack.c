@@ -50,8 +50,7 @@ void DLSpush(DLS* dls) {
 void DLSadd(DLS* dls, size_t dim) {
     DimsList* dml = top(dls);
 #ifdef DEBUGGING
-    // TODO: Fix macro to not need varglist
-    ASSERT_MSG((dml != NULL), "No DML initialised on the DMS%s", "");
+    ASSERT_MSG((dml != NULL), "No DML initialised on the DMS");
 #endif
     DMLadd(dml, dim);
 }

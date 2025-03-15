@@ -21,19 +21,19 @@
 /* Error with debug information for developing civic */
 #define ERROR(fmt, ...) do { \
     fprintf(stderr, "RUNTIME ERROR: "); \
-    fprintf(stderr, fmt, __VA_ARGS__); \
+    fprintf(stderr, fmt, ##__VA_ARGS__); \
     fprintf(stderr, "\n"); \
     assert(false); \
 } while (false)
 
 #define ASSERT_MSG(cond, fmt, ...) do { \
-    if (!cond) { ERROR(fmt, __VA_ARGS__); } \
+    if (!cond) { ERROR(fmt, ##__VA_ARGS__); } \
 } while (false)
 
 /* Error for developers using civic */
 #define USER_ERROR(fmt, ...) do { \
     fprintf(stderr, "ERROR: "); \
-    fprintf(stderr, fmt, __VA_ARGS__); \
+    fprintf(stderr, fmt, ##__VA_ARGS__); \
     fprintf(stderr, "\n"); \
     exit(1); \
 } while (false)
