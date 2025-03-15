@@ -86,6 +86,18 @@ ValueType valuetype_from_nt(const enum Type ct_type, const bool is_array) {
     }
 }
 
+ValueType demote_array_type(const ValueType array_type) {
+    switch (array_type) {
+        case VT_NUMARRAY: return VT_NUM;
+        case VT_FLOATARRAY: return VT_FLOAT;
+        case VT_BOOLARRAY: return VT_BOOL;
+        default: // Should never occur
+#ifdef DEBUGGING
+            ERROR("Unexpected array type %i", array_type);
+#endif
+    }
+}
+
 char* vt_to_string(const ValueType vt) {
 #ifdef DEBUGGING
     ASSERT_MSG((vt >= 0 && vt < 7), "Valuetype enum out of range: %i", vt);
@@ -104,7 +116,51 @@ static bool name_exists_in_top_scope(char* name) {
     return STSlookup(STS, name) != NULL;
 }
 
-void CTAinit() { }
+/**
+ * Traverses and saves the indices to DimsList. This function is for
+ * nodes that use the 'indices' macro. DLSpop needs to be called after
+ * this function, if the values are needed before discarding
+ * @param node current node
+ */
+static void handle_array_dims_exprs_for_indices_macro(node_st* node) {
+    // Push new DimList onto the stack
+    DLSpush(DLS);
+
+    // Get old flag for saving indices
+    const bool was_saving_idxs = SAVING_IDXS;
+
+    // Set new flag for saving indices to true
+    SAVING_IDXS = true;
+
+    TRAVindices(node);
+
+    // Restore saving indices flag
+    SAVING_IDXS = was_saving_idxs;
+}
+
+/**
+ * Traverses and saves the indices to DimsList. This function is for
+ * nodes that use the 'dims' macro. DLSpop needs to be called after
+ * this function, if the values are needed before discarding
+ * @param node current node
+ */
+static void handle_array_dims_exprs_for_dims_macro(node_st* node) {
+    // Push new DimList onto the stack
+    DLSpush(DLS);
+
+    // Get old flag for saving indices
+    const bool was_saving_idxs = SAVING_IDXS;
+
+    // Set new flag for saving indices to true
+    SAVING_IDXS = true;
+
+    TRAVdims(node);
+
+    // Restore saving indices flag
+    SAVING_IDXS = was_saving_idxs;
+}
+
+void CTAinit() {  }
 void CTAfini() {
     // Free functions also delete any leftovers, we don't worry about cleaning up
     STSfree(&STS);
@@ -565,35 +621,33 @@ node_st *CTAparam(node_st *node)
  */
 node_st *CTAvardecl(node_st *node)
 {
-    // TODO: Add array support
+    // Note: Requires array support
 
     char* name = VARDECL_NAME(node);
 
     HANDLE_DUPLICATE_ID(name);
 
-    // Add self to vartable of current scope
-    const ValueType type = valuetype_from_nt(VARDECL_TYPE(node), false);
+    // Find dimensions
+    handle_array_dims_exprs_for_dims_macro(node);
+
+    const DimsList* dml = DLSpeekTop(DLS);
+    const bool is_array = dml->size > 0;
+
+    const ValueType type = valuetype_from_nt(VARDECL_TYPE(node), is_array);
 
     Symbol* s = SBfromVar(name, type);
     STSadd(STS, name, s);
 
-    // Create new entry on indexing stack
-    DLSpush(DLS);
-
-    // TODO: activate and deactivate saving to DLS based on global parameter
-    // SAVE_DIMS = true;
-    TRAVdims(node);
-    // SAVE_DIMS = false;
-
     // Save information to array symbol
-    DimsList* dml = DLSpeekTop(DLS);
     s->as.array.dim_count = dml->size;
     s->as.array.dims = dml->dims;
 
-    // Clean up, except for dims list
-    DMLfree(&dml);
+    // Clean up
+    DLSpop(DLS);
 
     TRAVinit(node);
+    // TODO: find a way to see if there was an initialisation, and compare types and dimensions if so
+
     TRAVnext(node);
     return node;
 }
@@ -612,7 +666,7 @@ node_st *CTAstmts(node_st *node)
  */
 node_st *CTAassign(node_st *node)
 {
-    // TODO: Add array support
+    // Note: Might require array support?
 
     TRAVlet(node);
     const ValueType let_type = last_type;
@@ -704,32 +758,40 @@ node_st *CTAmonop(node_st *node)
  */
 node_st *CTAvarlet(node_st *node)
 {
-    // TODO: Add array support
+    // Note: Requires array support
 
-    char* name = VAR_NAME(node);
+    char* name = VARLET_NAME(node);
 
     // Look up variable
-    Symbol* s = STSlookup(STS, VARLET_NAME(node));
+    Symbol* s = STSlookup(STS, name);
 
+    // Handle case of missing symbol
     HANDLE_MISSING_SYMBOL(name, s);
 
-    last_type = s->vtype;
+    // Find dimensions
+    handle_array_dims_exprs_for_indices_macro(node);
 
-    // Create new entry on indexing stack
-    DLSpush(DLS);
+    const DimsList* dml = DLSpeekTop(DLS);
+    const bool is_array = dml->size > 0;
 
-    // TODO: activate and deactivate saving to DLS based on global parameter
-    // SAVE_DIMS = true;
-    TRAVdims(node);
-    // SAVE_DIMS = false;
+    if (is_array) {
+        // Ensure symbol is array
+        if (!IS_ARRAY(s->vtype)) {
+            USER_ERROR("Identifier %s was indexed, but is not an array", name);
+        }
 
-    // Save information to array symbol
-    DimsList* dml = DLSpeekTop(DLS);
-    s->as.array.dim_count = dml->size;
-    s->as.array.dims = dml->dims;
+        // Confirm dimensions are correct
+        if (s->as.array.dim_count != dml->size) {
+            USER_ERROR("Expected array dimension count is %lu but got %lu", s->as.array.dim_count, dml->size);
+        }
 
-    // Clean up, except for dims list
-    DMLfree(&dml);
+        last_type = demote_array_type(s->vtype);
+    } else {
+        last_type = s->vtype;
+    }
+
+    // Clean up
+    DLSpop(DLS);
 
     return node;
 }
@@ -739,32 +801,40 @@ node_st *CTAvarlet(node_st *node)
  */
 node_st *CTAvar(node_st *node)
 {
-    // TODO: Add array support
+    // Note: Requires array support
 
     char* name = VAR_NAME(node);
 
     // Look up variable
     Symbol* s = STSlookup(STS, name);
 
+    // Handle case of missing symbol
     HANDLE_MISSING_SYMBOL(name, s);
 
-    last_type = s->vtype;
+    // Find dimensions
+    handle_array_dims_exprs_for_indices_macro(node);
 
-    // Create new entry on indexing stack
-    DLSpush(DLS);
+    const DimsList* dml = DLSpeekTop(DLS);
+    const bool is_array = dml->size > 0;
 
-    // TODO: activate and deactivate saving to DLS based on global parameter
-    // SAVE_DIMS = true;
-    TRAVdims(node);
-    // SAVE_DIMS = false;
+    if (is_array) {
+        // Ensure symbol is array
+        if (!IS_ARRAY(s->vtype)) {
+            USER_ERROR("Identifier %s was indexed, but is not an array", name);
+        }
 
-    // Save information to array symbol
-    DimsList* dml = DLSpeekTop(DLS);
-    s->as.array.dim_count = dml->size;
-    s->as.array.dims = dml->dims;
+        // Confirm dimensions are correct
+        if (s->as.array.dim_count != dml->size) {
+            USER_ERROR("Expected array dimension count is %lu but got %lu", s->as.array.dim_count, dml->size);
+        }
 
-    // Clean up, except for dims list
-    DMLfree(&dml);
+        last_type = demote_array_type(s->vtype);
+    } else {
+        last_type = s->vtype;
+    }
+
+    // Clean up
+    DLSpop(DLS);
 
     return node;
 }

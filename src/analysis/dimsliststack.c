@@ -8,7 +8,7 @@ static DimsList* top(const DLS* dls) {
     return dls->dimslists[dls->ptr - 1];
 }
 
-void DMLSpop(DLS* dls) {
+void DLSpop(DLS* dls) {
     dls->ptr--;
     DMLfree(&dls->dimslists[dls->ptr]);
     dls->dimslists[dls->ptr] = NULL;
