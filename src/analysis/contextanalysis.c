@@ -17,6 +17,8 @@
 #include "dimsliststack.h"
 #include "symbol/tablestack.h"
 
+char* VT_TO_STR[] = {"int", "float", "bool", "void", "int[]", "float[]", "bool[]"};
+
 typedef enum {
     DECLARATION_PASS,
     ANALYSIS_PASS,
@@ -75,6 +77,13 @@ ValueType valuetype_from_nt(const enum Type ct_type, const bool is_array) {
             printf("Type error: unexpected ct_type %i\n", ct_type);
         exit(1);
     }
+}
+
+char* vt_to_string(const ValueType vt) {
+#ifdef DEBUGGING
+    ASSERT_MSG((vt >= 0 && vt < 7), "Valuetype enum out of range: %i", vt);
+#endif
+    return VT_TO_STR[vt];
 }
 
 static void exit_if_error() {
@@ -192,8 +201,8 @@ node_st *CTAreturn(node_st *node)
     char* parent_fun_name = STScurrentScopeName(STS);
     const Symbol* parent_fun = STSlookup(STS, parent_fun_name);
     if (ret_type != parent_fun->vtype) {
-        // TODO: Change with better error message
-        USER_ERROR("Return type is %i, but expected type %i", ret_type, parent_fun->vtype);
+        USER_ERROR("Trying to return %s from function with type %s",
+            vt_to_string(ret_type), vt_to_string(parent_fun->vtype));
     }
 
     return node;
@@ -242,8 +251,8 @@ node_st *CTAfuncall(node_st *node)
 
     for (size_t i = 0; i < params_len; i++) {
         if (args->type != param_types[i]) {
-            // TODO: Make more descriptive when we have enum to string function
-            USER_ERROR("Argument type %i and parameter type %i don't match", args->type, param_types[i]);
+            USER_ERROR("Argument type %s and parameter type %s don't match",
+                vt_to_string(args->type), vt_to_string(param_types[i]));
         }
 
         // TODO: Compare array dimensions
@@ -264,8 +273,8 @@ node_st *CTAcast(node_st *node)
 {
     TRAVchildren(node);
     if (!(last_type == VT_NUM || last_type == VT_FLOAT || last_type == VT_BOOL)) {
-        // TODO: Create enum-to-str function to better print errors instead of enum values
-        USER_ERROR("Invalid cast source, can only cast from Num, Float or Bool but got %i", last_type);
+        USER_ERROR("Invalid cast source, can only cast from Num, Float or Bool but got %s",
+            vt_to_string(last_type));
     }
 
     last_type = valuetype_from_nt(CAST_TYPE(node), false);
@@ -550,8 +559,8 @@ node_st *CTAassign(node_st *node)
     }
 
     else {
-        // TODO: Create enum-to-str function to better print errors instead of enum values
-        USER_ERROR("Operands not compatible: %i and %i", let_type, expr_type);
+        USER_ERROR("Operands not compatible: %s and %s",
+            vt_to_string(let_type), vt_to_string(expr_type));
     }
 
     return node;
@@ -582,8 +591,8 @@ node_st *CTAbinop(node_st *node)
     }
 
     else {
-        // TODO: Create enum-to-str function to better print errors instead of enum values
-        USER_ERROR("Operands not compatible: %i and %i", left_type, right_type);
+        USER_ERROR("Operands not compatible: %s and %s",
+            vt_to_string(left_type), vt_to_string(right_type));
     }
 
     return node;
@@ -600,18 +609,15 @@ node_st *CTAmonop(node_st *node)
     switch (MONOP_OP(node)) {
         // TODO: Find out if negated bool switches values (probably not)
         case MO_neg: if (!(last_type == VT_NUM || last_type == VT_FLOAT)) {
-            // TODO: Create enum-to-str function to better print errors instead of enum values
-            USER_ERROR("Expected operand type Num or Float, got %i instead", last_type);
+            USER_ERROR("Expected operand type Int or Float, got %s instead", vt_to_string(last_type));
         }
         break;
         case MO_not: if (last_type != VT_BOOL) {
-            // TODO: Create enum-to-str function to better print errors instead of enum values
-            USER_ERROR("Expected operand type Bool, got %i instead", last_type);
+            USER_ERROR("Expected operand type Bool, got %s instead", vt_to_string(last_type));
         }
         break;
         default: /* Should never occur */
-            // TODO: Fix macro such that string without format can parse
-            USER_ERROR("Unexpected error comparing monop type %i and expected type %i", 0, 1);
+            USER_ERROR("Unexpected error comparing monop type and expected type");
     }
 
     return node;
