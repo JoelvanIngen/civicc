@@ -51,6 +51,14 @@ bool HAD_ERROR = false;
     } \
 } while (false)
 
+#define HANDLE_MISSING_SYMBOL(name, s) do { \
+    if (s == NULL) { \
+        HAD_ERROR = true; \
+        USER_ERROR("Variable '%s' has not been declared yet", name); \
+        return node; \
+    } \
+} while (false)
+
 ValueType valuetype_from_nt(const enum Type ct_type, const bool is_array) {
     switch (ct_type) {
         case CT_int: return is_array ? VT_NUMARRAY : VT_NUM;
@@ -80,9 +88,7 @@ static bool name_exists_in_top_scope(char* name) {
     return STSlookup(STS, name) != NULL;
 }
 
-void CTAinit() {
-    return;
-}
+void CTAinit() { }
 void CTAfini() {
     // Free functions also delete any leftovers, we don't worry about cleaning up
     STSfree(&STS);
@@ -201,12 +207,14 @@ node_st *CTAfuncall(node_st *node)
     // Check if function exists and is actually a function
     Symbol* s = STSlookup(STS, FUNCALL_NAME(node));
     if (!s) {
+        HAD_ERROR = true;
         USER_ERROR("Function name %s does not exist in scope.", FUNCALL_NAME(node));
         last_type = VT_VOID;
         return node;
     }
 
     if (s->stype != ST_FUNCTION) {
+        HAD_ERROR = true;
         USER_ERROR("Name %s is not defined as a function.", FUNCALL_NAME(node));
         last_type = VT_VOID;
         return node;
@@ -616,13 +624,12 @@ node_st *CTAvarlet(node_st *node)
 {
     // TODO: Add array support
 
+    char* name = VAR_NAME(node);
+
     // Look up variable
     Symbol* s = STSlookup(STS, VARLET_NAME(node));
-    if (s == NULL) {
-        // TODO: Show error that variable doesn't exist
-        // Exit for now to prevent IDE warnings
-        exit(1);
-    }
+
+    HANDLE_MISSING_SYMBOL(name, s);
 
     last_type = s->vtype;
 
@@ -652,13 +659,12 @@ node_st *CTAvar(node_st *node)
 {
     // TODO: Add array support
 
+    char* name = VAR_NAME(node);
+
     // Look up variable
-    Symbol* s = STSlookup(STS, VAR_NAME(node));
-    if (s == NULL) {
-        // TODO: Show error that variable doesn't exist
-        // Exit for now to prevent IDE warnings
-        exit(1);
-    }
+    Symbol* s = STSlookup(STS, name);
+
+    HANDLE_MISSING_SYMBOL(name, s);
 
     last_type = s->vtype;
 
