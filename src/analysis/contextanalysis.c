@@ -45,6 +45,7 @@ bool HAD_ERROR = false;
 // Short for printing error on duplicate identifier name and immediately returning
 #define HANDLE_DUPLICATE_ID(name) do { \
     if (name_exists_in_top_scope(name)) { \
+        HAD_ERROR = true; \
         USER_ERROR("Variable '%s' is already declared", name); \
         return node; \
     } \
