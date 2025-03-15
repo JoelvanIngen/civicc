@@ -145,7 +145,6 @@ node_st *CTAprogram(node_st *node)
  */
 node_st *CTAdecls(node_st *node)
 {
-    // Reset error flag
     TRAVchildren(node);
     return node;
 }
