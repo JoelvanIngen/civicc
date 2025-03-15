@@ -18,7 +18,7 @@ typedef struct {
 } ArgList;
 
 typedef struct {
-    ArgList* fun_calls;
+    ArgList** fun_calls;
     size_t ptr;
     size_t size;
 } ArgListStack;
@@ -32,5 +32,5 @@ void ALSfree(ArgListStack** als);
 void ALSpush(ArgListStack* als);
 void ALSpop(ArgListStack* als);
 void ALSadd(ArgListStack* als, const char* name, ValueType type);
-Argument* ALSgetCurrentArgs(const ArgListStack* als);
+Argument** ALSgetCurrentArgs(const ArgListStack* als);
 size_t ALSgetCurrentLength(const ArgListStack* als);

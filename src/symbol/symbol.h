@@ -30,6 +30,7 @@ typedef struct {
     size_t param_count;
     size_t capacity;
     ValueType* param_types;
+    size_t* param_dim_counts;             // Only non-zero for param_types that are arrays
 } FunData;
 
 typedef struct {
@@ -47,4 +48,4 @@ Symbol* SBfromArray(const char* name, ValueType vt);
 Symbol* SBfromVar(const char* name, ValueType vt);
 void SBfree(Symbol** s);
 void SBaddDim(Symbol* s, size_t dim);
-void SBaddParam(Symbol* s, ValueType vt);
+void SBaddParam(Symbol* s, ValueType vt, size_t dim_count);

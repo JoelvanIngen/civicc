@@ -55,7 +55,7 @@ ALS* ALSnew() {
 void ALSfree(ALS** als) {
     // Free all internal lists
     for (size_t i = 0; i < (*als)->ptr; i++) {
-        ALfree(&(*als)->fun_calls[i]);
+        ALfree((*als)->fun_calls[i]);
     }
 
     // Free self
@@ -66,27 +66,27 @@ void ALSfree(ALS** als) {
 /** Starts a new funcall */
 void ALSpush(ALS* als) {
     checkResizeALS(als);
-    ALinit(&als->fun_calls[als->ptr]);
+    ALinit(als->fun_calls[als->ptr]);
     als->ptr++;
 }
 
 /** Ends a funcall and discards list */
 void ALSpop(ALS* als) {
     als->ptr--;
-    ALfree(&als->fun_calls[als->ptr]);
+    ALfree(als->fun_calls[als->ptr]);
 }
 
 /** Adds a new parameter on the current funcall */
 void ALSadd(ALS* als, const char* name, const ValueType type) {
-    ALadd(&als->fun_calls[als->ptr - 1], name, type);
+    ALadd(als->fun_calls[als->ptr - 1], name, type);
 }
 
 /** Points to the first argument of the current scope */
-Argument* ALSgetCurrentArgs(const ALS* als) {
-    return als->fun_calls[als->ptr - 1].args;
+Argument** ALSgetCurrentArgs(const ALS* als) {
+    return &als->fun_calls[als->ptr - 1]->args;
 }
 
 /** Returns the length of the current scope (upper bound exclusive) */
 size_t ALSgetCurrentLength(const ALS* als) {
-    return als->fun_calls[als->ptr - 1].ptr;
+    return als->fun_calls[als->ptr - 1]->ptr;
 }
