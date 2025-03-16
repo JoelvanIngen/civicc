@@ -20,6 +20,10 @@ traversal ContextAnalysis {
     uid = CTA
 };
 
+traversal ByteCodeGeneration {
+    uid = BC
+};
+
 /*****************************************************************************
  *                                                                           *
  *                                   ENUMS                                   *
