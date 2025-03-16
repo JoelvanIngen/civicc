@@ -32,11 +32,23 @@ static void write_instructions(FILE* f, const Instruction* instruction) {
     }
 }
 
+static void write_single_constant(FILE* f, const Constant* constant) {
+    fprintf(f, ".const %s %s", constant->type, constant->value);
+}
+
+static void write_constants(FILE* f, const Constant* constant) {
+    while (constant != NULL) {
+        write_single_constant(f, constant);
+        fprintf(f, "\n");
+        constant = constant->next;
+    }
+}
+
 void write_assembly(FILE* f, const Assembly* ASM) {
     write_instructions(f, ASM->instrs);
     fprintf(f, "\n");  // Extra newline like in examples
     // write_glob_vartable(f, ASM->glob_vars);
-    // write_const_table(f, ASM->consts);
+    write_constants(f, ASM->consts);
     // write_fun_import_table(f, ASM->fun_imports);
     // write_fun_export_table(f, ASM->fun_exports);
     // write_var_import_table(f, ASM->var_imports);

@@ -7,7 +7,7 @@
 /** TODO: Add all necessary modules
  * - Instructions (done)
  * - Global variable table
- * - Constant table
+ * - Constant table (done)
  * - Function import table
  * - Function export table (done)
  * - Variable import table
@@ -22,6 +22,12 @@ typedef struct Instruction {
                                 // so with a linked list we avoid size checks
 } Instruction;
 
+typedef struct Constant {
+    char* type;
+    char* value;
+    struct Constant* next;
+} Constant;
+
 typedef struct FunExport {
     char* name;                 // Name of exported function
     char* type;                 // Return type of function
@@ -33,6 +39,8 @@ typedef struct FunExport {
 typedef struct {
     Instruction* instrs;
     Instruction* last_instr;
+    Constant* consts;
+    Constant* last_const;
     FunExport* fun_exports;
     FunExport* last_fun_export;
 } Assembly;
@@ -40,3 +48,5 @@ typedef struct {
 void ASMinit(Assembly* assembly);
 void ASMfree(Assembly** assembly_ptr);
 void ASMemitInstr(Assembly* assembly, char* instr_name, char* arg0, char* arg1, char* arg2, bool is_label);
+void ASMemitConst(Assembly* assembly, char* type, char* val);
+void ASMemitFunExport(Assembly* assembly, char name, char* type, char** args, bool is_main);
