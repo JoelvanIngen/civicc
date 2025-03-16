@@ -505,6 +505,8 @@ node_st *CTAfor(node_st *node)
  */
 node_st *CTAglobdecl(node_st *node)
 {
+    // Note: Requires array support
+
     char* name = GLOBDECL_NAME(node);
 
     HANDLE_DUPLICATE_ID(name);
@@ -518,8 +520,9 @@ node_st *CTAglobdecl(node_st *node)
     // Add self to vartable of current scope
     Symbol* s;
     const ValueType type = valuetype_from_nt(GLOBDECL_TYPE(node), is_array);
+
     if (is_array) {
-        s = SBfromVar(name, type);
+        s = SBfromArray(name, type);
         s->as.array.dim_count = IDL->size;
     } else {
         s = SBfromVar(name, type);
@@ -527,7 +530,7 @@ node_st *CTAglobdecl(node_st *node)
 
     STSadd(STS, name, s);
 
-    // Clean up - note: free function does not free internal ids list
+    // Clean up - note: free function does not (yet) free internal ids list
     IDLfree(&IDL);
 
     return node;
@@ -538,18 +541,14 @@ node_st *CTAglobdecl(node_st *node)
  */
 node_st *CTAglobdef(node_st *node)
 {
-    // TODO: Add array support
+    // Note: Requires array support
 
     char* name = GLOBDEF_NAME(node);
 
     HANDLE_DUPLICATE_ID(name);
 
-    // Find dimensions, represented as exprs
-    // Create new entry on indexing stack
-    DLSpush(DLS);
-    SAVING_IDXS = true;
-    TRAVdims(node);
-    SAVING_IDXS = false;
+    // Find dimensions
+    handle_array_dims_exprs_for_dims_macro(node);
 
     // Add self to vartable of current scope
     const ValueType type = valuetype_from_nt(GLOBDEF_TYPE(node), false);
@@ -580,6 +579,8 @@ node_st *CTAglobdef(node_st *node)
             vt_to_string(last_type));
     }
 
+    // TODO: Allow scalar to init array
+
     return node;
 }
 
@@ -588,7 +589,7 @@ node_st *CTAglobdef(node_st *node)
  */
 node_st *CTAparam(node_st *node)
 {
-    // TODO: Add array support
+    // Note: Requires array support
 
     char* param_name = PARAM_NAME(node);
 
@@ -598,12 +599,19 @@ node_st *CTAparam(node_st *node)
     IDL = IDLnew();
     TRAVdims(node);
 
+    const bool is_array = IDL->size > 0;
+
     // Add self to vartable of current scope
-    const ValueType param_type = valuetype_from_nt(PARAM_TYPE(node), false);
+    const ValueType param_type = valuetype_from_nt(PARAM_TYPE(node), is_array);
 
     // Add parameter as variable to scope
     Symbol* s = SBfromVar(param_name, param_type);
     STSadd(STS, param_name, s);
+
+    if (is_array) {
+        // Add array properties
+        s->as.array.dim_count = IDL->size;
+    }
 
     // Add parameter to the function it belongs to
     char* fun_name = STScurrentScopeName(STS);
@@ -635,18 +643,32 @@ node_st *CTAvardecl(node_st *node)
 
     const ValueType type = valuetype_from_nt(VARDECL_TYPE(node), is_array);
 
+    // Create and add symbol to scope
     Symbol* s = SBfromVar(name, type);
     STSadd(STS, name, s);
 
-    // Save information to array symbol
-    s->as.array.dim_count = dml->size;
-    s->as.array.dims = dml->dims;
+    if (is_array) {
+        // Save information to array symbol
+        s->as.array.dim_count = dml->size;
+        s->as.array.dims = dml->dims;
+    }
 
     // Clean up
     DLSpop(DLS);
 
+    last_type = VT_NULL;
     TRAVinit(node);
-    // TODO: find a way to see if there was an initialisation, and compare types and dimensions if so
+
+    // Find out if an init existed
+    if (last_type != VT_NULL) {
+        // Compare types
+        // TODO: Allow scalar to init array
+        // TODO: Find out if types implicitly cast
+        if (s->vtype != last_type) {
+            USER_ERROR("Tried to initialise variable %s with %s",
+                vt_to_string(s->vtype), vt_to_string(last_type));
+        }
+    }
 
     TRAVnext(node);
     return node;

@@ -18,6 +18,7 @@ typedef enum {
     VT_NUMARRAY,
     VT_FLOATARRAY,
     VT_BOOLARRAY,
+    VT_NULL                             // Used to set as "no value top" within the code
 } ValueType;
 
 typedef struct {
@@ -30,7 +31,7 @@ typedef struct {
     size_t param_count;
     size_t capacity;
     ValueType* param_types;
-    size_t* param_dim_counts;             // Only non-zero for param_types that are arrays
+    size_t* param_dim_counts;           // Only non-zero for param_types that are arrays
 } FunData;
 
 typedef struct {
