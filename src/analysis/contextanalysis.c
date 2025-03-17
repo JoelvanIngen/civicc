@@ -780,6 +780,8 @@ node_st *CTAmonop(node_st *node)
  */
 node_st *CTAvarlet(node_st *node)
 {
+    // TODO: Disallow storing to imported variables
+
     // Note: Requires array support
 
     char* name = VARLET_NAME(node);

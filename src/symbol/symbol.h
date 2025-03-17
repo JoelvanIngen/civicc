@@ -38,6 +38,8 @@ typedef struct {
     SymbolType stype;
     ValueType vtype;
     const char* name;
+    size_t nesting_level;
+    size_t offset;                      // Offset within scope
     union {
         ArrayData array;
         FunData fun;
