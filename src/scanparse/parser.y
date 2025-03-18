@@ -191,7 +191,8 @@ localfundefs: localfundef localfundefs
 funbody: BRACE_L[startbrace] vardecls[decls] localfundefs[fundefs] stmts[sts] BRACE_R[endbrace]
           {
             $$ = ASTfunbody();
-            FUNBODY_DECLS($$) = $decls;
+            // TODO: Reverse vardecls linked list
+            FUNBODY_DECLS($$) = reversed($decls);
             FUNBODY_LOCAL_FUNDEFS($$) = $fundefs;
             FUNBODY_STMTS($$) = $sts;
             AddLocToNode($$, &@startbrace, &@endbrace);
@@ -298,10 +299,11 @@ ids: ID
       }
       ;
 
+// Vardecls list needs to be generated in reverse to avoid conflicts
 vardecls: vardecls vardecl
         {
-          $$ = $1;
-          VARDECL_NEXT($2) = $1;
+          $$ = $2;
+          VARDECL_NEXT($$) = $1;
         }
         | %empty
         {
@@ -417,6 +419,9 @@ type: INTTYPE   { $$ = CT_int; }
     ;
 
 %%
+
+// TODO
+node_st* reversed()
 
 void AddLocToNode(node_st *node, void *begin_loc, void *end_loc)
 {
