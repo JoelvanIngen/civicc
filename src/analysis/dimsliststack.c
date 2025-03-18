@@ -43,7 +43,7 @@ void DLSpush(DLS* dls) {
         dls->dimslists = MEMrealloc(dls->dimslists, dls->capacity * sizeof(DimsList*));
     }
 
-    dls->dimslists[dls->ptr - 1] = DMLnew();
+    dls->dimslists[dls->ptr] = DMLnew();
     dls->ptr++;
 }
 
