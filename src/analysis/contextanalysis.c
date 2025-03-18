@@ -420,12 +420,7 @@ node_st *CTAfundef(node_st *node)
         // Add parameters to scope
         TRAVparams(node);
 
-        // Find definitions in function body
-        PASS = DECLARATION_PASS;
-        TRAVbody(node);
-
         // Explore function body
-        PASS = ANALYSIS_PASS;
         TRAVbody(node);
 
         // Discard scope as it is no longer needed
