@@ -15,6 +15,7 @@
 #include "ccngen/trav.h"
 
 #include "common.h"
+#include "global/globals.h"
 #include "idlist.h"
 #include "argstack.h"
 #include "dimsliststack.h"
@@ -175,6 +176,7 @@ node_st *CTAprogram(node_st *node)
 {
     // TODO: Free global scope after bytecode generation
     CURRENT_SCOPE = STnew(NULL, NULL);
+    GB_GLOBAL_SCOPE = CURRENT_SCOPE;
 
     // Initialise funcall argument stack
     ALS = ALSnew();

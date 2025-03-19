@@ -14,9 +14,13 @@
 #include "common.h"
 #include "asm.h"
 #include "writer.h"
+#include "global/globals.h"
+#include "symbol/table.h"
 
 FILE* ASM_FILE;
 Assembly ASM;
+
+SymbolTable* CURRENT_SCOPE;
 
 static void init() {
     // TODO: probably make filename command-line argument
@@ -25,6 +29,8 @@ static void init() {
         fprintf(stderr, "Error creating bytecode file");
         exit(1);
     }
+
+    CURRENT_SCOPE = GB_GLOBAL_SCOPE;
 }
 
 static void fini() {

@@ -11,5 +11,7 @@ struct globals {
     char *output_file;
 };
 
+extern struct SymbolTable* GB_GLOBAL_SCOPE;
+
 extern struct globals global;
 extern void GLBinitializeGlobals(void);
