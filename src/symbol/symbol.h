@@ -4,6 +4,8 @@
 
 #include "common.h"
 
+struct SymbolTable;
+
 typedef enum {
     ST_VALUEVAR,
     ST_ARRAYVAR,
@@ -32,13 +34,13 @@ typedef struct {
     size_t capacity;
     ValueType* param_types;
     size_t* param_dim_counts;           // Only non-zero for param_types that are arrays
+    struct SymbolTable* scope;          // Scope belonging to this function
 } FunData;
 
 typedef struct {
     SymbolType stype;
     ValueType vtype;
-    const char* name;
-    size_t nesting_level;
+    char* name;
     size_t offset;                      // Offset within scope
     union {
         ArrayData array;
@@ -46,9 +48,9 @@ typedef struct {
     } as;
 } Symbol;
 
-Symbol* SBfromFun(const char* name, ValueType vt);
-Symbol* SBfromArray(const char* name, ValueType vt);
-Symbol* SBfromVar(const char* name, ValueType vt);
-void SBfree(Symbol** s);
+Symbol* SBfromFun(char* name, ValueType vt);
+Symbol* SBfromArray(char* name, ValueType vt);
+Symbol* SBfromVar(char* name, ValueType vt);
+void SBfree(Symbol** s_ptr);
 void SBaddDim(Symbol* s, size_t dim);
 void SBaddParam(Symbol* s, ValueType vt, size_t dim_count);
