@@ -35,6 +35,10 @@ void STinsert(const SymbolTable* st, char* name, Symbol* sym) {
         USER_ERROR("Symbol %s already exists, but is redefined", name);
         return;
     }
+
+#ifdef DEBUGGING
+    ASSERT_MSG((sym->scope == NULL), "Trying to assign scope to symbol, but it was already assigned");
+#endif // DEBUGGING
     HTinsert(st->table, STRcpy(name), sym);
 }
 

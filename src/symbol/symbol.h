@@ -42,6 +42,7 @@ typedef struct {
     ValueType vtype;
     char* name;
     size_t offset;                      // Offset within scope
+    struct SymbolTable* scope;          // Scope this symbol is assigned to
     union {
         ArrayData array;
         FunData fun;
