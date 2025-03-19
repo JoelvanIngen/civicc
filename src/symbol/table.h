@@ -6,6 +6,7 @@
 #include "symbol.h"
 
 typedef struct SymbolTable {
+    size_t offset_counter;              // Tracks offset for next variable
     size_t nesting_level;               // Nesting level; global is zero
     struct SymbolTable* parent_scope;   // Pointer to parent scope
     Symbol* parent_fun;                 // Function this scope belongs to

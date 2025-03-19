@@ -4,6 +4,7 @@
 
 SymbolTable* STnew(SymbolTable* parent_table, Symbol* parent_symbol) {
     SymbolTable* st = MEMmalloc(sizeof(SymbolTable));
+    st->offset_counter = 0;
     st->nesting_level = parent_table == NULL ? 0 : parent_table->nesting_level + 1;
     st->parent_scope = parent_table;
     st->parent_fun = parent_symbol;
@@ -39,6 +40,8 @@ void STinsert(SymbolTable* st, char* name, Symbol* sym) {
 #ifdef DEBUGGING
     ASSERT_MSG((sym->parent_scope == NULL), "Trying to assign scope to symbol, but it was already assigned");
 #endif // DEBUGGING
+    sym->offset = st->offset_counter;
+    st->offset_counter++;
     sym->parent_scope = st;
     HTinsert(st->table, STRcpy(name), sym);
 }
