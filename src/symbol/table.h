@@ -5,10 +5,10 @@
 #include "common.h"
 #include "symbol.h"
 
-typedef struct {
-    char* name;       // Name of function that the scope belongs to, or NULL if global
-    ValueType type;         // Return type that the function returns
-    htable_st* table;       // Hashtable mapping symbol name to its properties
+typedef struct SymbolTable {
+    struct SymbolTable* parent_scope;   // Pointer to parent scope
+    Symbol* parent_fun;                 // Function this scope belongs to
+    htable_st* table;                   // Hashtable mapping symbol name to its properties
 } SymbolTable;
 
 SymbolTable* STnew(char* name, ValueType type);

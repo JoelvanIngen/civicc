@@ -18,6 +18,7 @@
 #include "idlist.h"
 #include "argstack.h"
 #include "dimsliststack.h"
+#include "symbol/table.h"
 #include "symbol/tablestack.h"
 
 char* VT_TO_STR[] = {"int", "float", "bool", "void", "int[]", "float[]", "bool[]"};
@@ -31,7 +32,7 @@ PassType PASS;
 ValueType last_type;
 
 // Stacking nested functions
-SymbolTableStack* STS;
+SymbolTable* CURRENT_SCOPE;
 
 // Stacking nested function calls
 ArgListStack* ALS;

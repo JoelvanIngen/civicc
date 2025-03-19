@@ -2,15 +2,18 @@
 
 #include "table.h"
 
-SymbolTable* STnew(char* name, const ValueType type) {
+SymbolTable* STnew(SymbolTable* parent_table, Symbol* parent_symbol) {
     SymbolTable* st = MEMmalloc(sizeof(SymbolTable));
-    st->name = name;
-    st->type = type;
+    st->parent_scope = parent_table;
+    st->parent_fun = parent_symbol;
     st->table = HTnew_String(VARTABLE_SIZE);
     return st;
 }
 
+// TODO: Free children symbols
 void STfree(SymbolTable** st) {
+    // Loop through all symbols and delete them
+
     HTdelete((*st)->table);
     MEMfree(*st);
     *st = NULL;

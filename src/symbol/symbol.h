@@ -4,6 +4,8 @@
 
 #include "common.h"
 
+struct SymbolTable;
+
 typedef enum {
     ST_VALUEVAR,
     ST_ARRAYVAR,
@@ -32,13 +34,13 @@ typedef struct {
     size_t capacity;
     ValueType* param_types;
     size_t* param_dim_counts;           // Only non-zero for param_types that are arrays
+    struct SymbolTable;                 // Scope belonging to this function
 } FunData;
 
 typedef struct {
     SymbolType stype;
     ValueType vtype;
     const char* name;
-    size_t nesting_level;
     size_t offset;                      // Offset within scope
     union {
         ArrayData array;
