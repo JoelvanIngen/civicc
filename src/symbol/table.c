@@ -4,6 +4,7 @@
 
 SymbolTable* STnew(SymbolTable* parent_table, Symbol* parent_symbol) {
     SymbolTable* st = MEMmalloc(sizeof(SymbolTable));
+    st->nesting_level = parent_table == NULL ? 0 : parent_table->nesting_level + 1;
     st->parent_scope = parent_table;
     st->parent_fun = parent_symbol;
     st->table = HTnew_String(VARTABLE_SIZE);
