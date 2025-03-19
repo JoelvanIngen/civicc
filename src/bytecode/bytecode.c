@@ -15,6 +15,7 @@
 #include "asm.h"
 #include "writer.h"
 #include "global/globals.h"
+#include "symbol/scopetree.h"
 #include "symbol/table.h"
 
 FILE* ASM_FILE;
@@ -47,6 +48,7 @@ node_st *BCprogram(node_st *node)
 
     TRAVchildren(node);
 
+    // Write collected ASM to file
     fini();
     return node;
 }
@@ -57,6 +59,10 @@ node_st *BCprogram(node_st *node)
 node_st *BCdecls(node_st *node)
 {
     TRAVchildren(node);
+
+    /**
+     * Do nothing
+     */
     return node;
 }
 
@@ -66,6 +72,10 @@ node_st *BCdecls(node_st *node)
 node_st *BCexprs(node_st *node)
 {
     TRAVchildren(node);
+
+    /**
+     * Do nothing
+     */
     return node;
 }
 
@@ -75,6 +85,10 @@ node_st *BCexprs(node_st *node)
 node_st *BCarrexpr(node_st *node)
 {
     TRAVchildren(node);
+
+    /**
+     * TODO: No idea
+     */
     return node;
 }
 
@@ -84,6 +98,10 @@ node_st *BCarrexpr(node_st *node)
 node_st *BCids(node_st *node)
 {
     TRAVchildren(node);
+
+    /**
+     * TODO: No idea
+     */
     return node;
 }
 
@@ -102,6 +120,10 @@ node_st *BCexprstmt(node_st *node)
 node_st *BCreturn(node_st *node)
 {
     TRAVchildren(node);
+
+    /**
+     * Emit return instruction (with correct type)
+     */
     return node;
 }
 
@@ -111,6 +133,13 @@ node_st *BCreturn(node_st *node)
 node_st *BCfuncall(node_st *node)
 {
     TRAVchildren(node);
+
+    /**
+     * For each argument:
+     * -- Emit load for argument
+     * Find out which scope function is from for funcall instruction?
+     * Emit funcall instruction with amount of vars added
+     */
     return node;
 }
 
@@ -134,6 +163,10 @@ node_st *BCcast(node_st *node)
 node_st *BCfundefs(node_st *node)
 {
     TRAVchildren(node);
+
+    /**
+     * Do nothing
+     */
     return node;
 }
 
@@ -142,7 +175,21 @@ node_st *BCfundefs(node_st *node)
  */
 node_st *BCfundef(node_st *node)
 {
+    char* name = FUNDEF_NAME(node);
+    const Symbol* fun_symbol = ScopeTreeFind(CURRENT_SCOPE, name);
+
+    // Switch scope
+    SymbolTable* prev_scope = CURRENT_SCOPE;
+    CURRENT_SCOPE = fun_symbol->as.fun.scope;
+
     TRAVchildren(node);
+
+    // Revert scope
+    CURRENT_SCOPE = prev_scope;
+
+    /**
+    * Do nothing?
+    */
     return node;
 }
 
@@ -151,12 +198,16 @@ node_st *BCfundef(node_st *node)
  */
 node_st *BCfunbody(node_st *node)
 {
-    TRAVchildren(node);
+    TRAVlocal_fundefs(node);
+
+    TRAVdecls(node);
+    TRAVstmts(node);
 
     /**
+     * Traverse nested functions (otherwise functions mix in bytecode)
      * Emit function label
      * Emit "esr N" with N being the amount of variables we are going to use in function
-     * Traverse children
+     * Traverse decls and stmts
      * !!! TODO: figure out a way to find the amount of variables used in function
      * !!! TODO: figure out if for-loop variables count for that purpose (would make everything a tad trickier)
      */
