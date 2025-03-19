@@ -10,15 +10,13 @@
  */
 Symbol* ScopeTreeFind(SymbolTable* scope, char* name) {
 #ifdef DEBUGGING
-    ASSERT_MSG((scope != NULL), "Got NULL for variable scope");\
+    ASSERT_MSG((scope != NULL), "Got NULL for variable scope");
 #endif // DEBUGGING
-    SymbolTable* parent = scope->parent_scope;
-
     while (scope != NULL) {
         Symbol* s = STlookup(scope, name);
         if (s != NULL) return s;
 
-        scope = parent;
+        scope = scope->parent_scope;
     }
 
     return NULL;

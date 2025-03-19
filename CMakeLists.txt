@@ -36,7 +36,6 @@ add_executable(civicc ${FLEX_CivicLexer_OUTPUTS} ${BISON_CivicParser_OUTPUTS}
         src/analysis/argstack.c src/analysis/argstack.h
         src/symbol/symbol.c src/symbol/symbol.h
         src/symbol/table.c src/symbol/table.h
-        src/symbol/tablestack.c src/symbol/tablestack.h
         src/analysis/idlist.c src/analysis/idlist.h
         src/analysis/dimslist.c src/analysis/dimslist.h
         src/analysis/dimsliststack.c src/analysis/dimsliststack.h

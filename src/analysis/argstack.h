@@ -6,7 +6,7 @@
 
 typedef struct {
     ValueType type;
-    const char* name;
+    char* name;
     size_t arr_dim_count;
     size_t* arr_dims;
 } Argument;
@@ -25,12 +25,12 @@ typedef struct {
 
 ArgList* PLnew();
 
-void ALadd(ArgList* pl, const char* name, ValueType type);
+void ALadd(ArgList* al, char* name, ValueType type);
 
 ArgListStack* ALSnew();
 void ALSfree(ArgListStack** als);
 void ALSpush(ArgListStack* als);
 void ALSpop(ArgListStack* als);
-void ALSadd(ArgListStack* als, const char* name, ValueType type);
+void ALSadd(ArgListStack* als, char* name, ValueType type);
 Argument** ALSgetCurrentArgs(const ArgListStack* als);
 size_t ALSgetCurrentLength(const ArgListStack* als);

@@ -18,8 +18,8 @@
 #include "idlist.h"
 #include "argstack.h"
 #include "dimsliststack.h"
+#include "symbol/scopetree.h"
 #include "symbol/table.h"
-#include "symbol/tablestack.h"
 
 char* VT_TO_STR[] = {"int", "float", "bool", "void", "int[]", "float[]", "bool[]"};
 
@@ -31,7 +31,7 @@ typedef enum {
 PassType PASS;
 ValueType last_type;
 
-// Stacking nested functions
+// Current scope in the tree
 SymbolTable* CURRENT_SCOPE;
 
 // Stacking nested function calls
@@ -114,7 +114,7 @@ static void exit_if_error() {
 }
 
 static bool name_exists_in_top_scope(char* name) {
-    return STSlookup(STS, name) != NULL;
+    return STlookup(CURRENT_SCOPE, name) != NULL;
 }
 
 /**
@@ -164,7 +164,6 @@ static void handle_array_dims_exprs_for_dims_macro(node_st* node) {
 void CTAinit() {  }
 void CTAfini() {
     // Free functions also delete any leftovers, we don't worry about cleaning up
-    STSfree(&STS);
     ALSfree(&ALS);
     DLSfree(&DLS);
 }
@@ -174,17 +173,14 @@ void CTAfini() {
  */
 node_st *CTAprogram(node_st *node)
 {
-    // Initialise symbol table stack
-    STS = STSnew();
+    // TODO: Free global scope after bytecode generation
+    CURRENT_SCOPE = STnew(NULL, NULL);
 
     // Initialise funcall argument stack
     ALS = ALSnew();
 
     // Initialise dimension stack
     DLS = DLSnew();
-
-    // Create global scope, with void return type (will never be used anyway)
-    STSpush(STS, NULL, VT_VOID);
 
     /* First pass; we only look at function definitions, so we can correctly
      * handle usages of functions that have not been defined yet
@@ -263,7 +259,7 @@ node_st *CTAids(node_st *node)
     IDLadd(IDL, name);
 
     // Add name to scope as type integer
-    STSadd(STS, name, VT_NUM);
+    STinsert(CURRENT_SCOPE, name, VT_NUM);
 
     TRAVchildren(node);
     return node;
@@ -290,11 +286,10 @@ node_st *CTAreturn(node_st *node)
     const ValueType ret_type = expr == NULL ? VT_VOID : last_type;
 
     // Check validity of return expression
-    char* parent_fun_name = STScurrentScopeName(STS);
-    const Symbol* parent_fun = STSlookup(STS, parent_fun_name);
-    if (ret_type != parent_fun->vtype) {
+    const ValueType parent_fun_type = CURRENT_SCOPE->parent_fun->vtype;
+    if (ret_type != parent_fun_type) {
         USER_ERROR("Trying to return %s from function with type %s",
-            vt_to_string(ret_type), vt_to_string(parent_fun->vtype));
+            vt_to_string(ret_type), vt_to_string(parent_fun_type));
     }
 
     return node;
@@ -306,17 +301,18 @@ node_st *CTAreturn(node_st *node)
 node_st *CTAfuncall(node_st *node)
 {
     // Check if function exists and is actually a function
-    Symbol* s = STSlookup(STS, FUNCALL_NAME(node));
+    char* name = FUNCALL_NAME(node);
+    Symbol* s = ScopeTreeFind(CURRENT_SCOPE, name);
     if (!s) {
         HAD_ERROR = true;
-        USER_ERROR("Function name %s does not exist in scope.", FUNCALL_NAME(node));
+        USER_ERROR("Function name %s does not exist in scope.", name);
         last_type = VT_VOID;
         return node;
     }
 
     if (s->stype != ST_FUNCTION) {
         HAD_ERROR = true;
-        USER_ERROR("Name %s is not defined as a function.", FUNCALL_NAME(node));
+        USER_ERROR("Name %s is not defined as a function.", name);
         last_type = VT_VOID;
         return node;
     }
@@ -410,13 +406,15 @@ node_st *CTAfundef(node_st *node)
     if (PASS == DECLARATION_PASS) {
         /* First pass: only return information about self */
         Symbol* s = SBfromFun(fun_name, ret_type);
-        STSadd(STS, fun_name, s);
+        s->as.fun.scope = STnew(CURRENT_SCOPE, s);
+        STinsert(CURRENT_SCOPE, fun_name, s);
     } else {
         /* Second pass: explore information about own statements
          * Here we also detect if variables are wrongly typed */
 
-        // Add local scope to stack
-        STSpush(STS, fun_name, ret_type);
+        // Switch to new scope
+        const Symbol* s = STlookup(CURRENT_SCOPE, fun_name);
+        CURRENT_SCOPE = s->as.fun.scope;
 
         // Add parameters to scope
         TRAVparams(node);
@@ -424,8 +422,8 @@ node_st *CTAfundef(node_st *node)
         // Explore function body
         TRAVbody(node);
 
-        // Discard scope as it is no longer needed
-        STSpop(STS);
+        // Switch back to parent scope
+        CURRENT_SCOPE = CURRENT_SCOPE->parent_scope;
     }
 
     return node;
@@ -480,18 +478,23 @@ node_st *CTAdowhile(node_st *node)
  */
 node_st *CTAfor(node_st *node)
 {
-    // Create new scope to ensure proper handling of loop variable
-    STSpush(STS, NULL, VT_VOID);
+    // TODO: Rework
+    // -- Either keep new scope and work that into symbol and scopetree logic
+    // -- Or prefix the variable with an underscore but find a way to make that work in the bytecode
+    // For now, I'll keep it in the same scope - but we need to fix that since vars will collide
+
+    // // Create new scope to ensure proper handling of loop variable
+    // STSpush(STS, NULL, VT_VOID);
 
     char* name = FOR_VAR(node);
 
     Symbol* s = SBfromVar(name, VT_NUM);
-    STSadd(STS, name, s);
+    STinsert(CURRENT_SCOPE, name, s);
 
     TRAVchildren(node);
 
-    // Discard scope
-    STSpop(STS);
+    // // Discard scope
+    // STSpop(STS);
 
     return node;
 }
@@ -524,7 +527,7 @@ node_st *CTAglobdecl(node_st *node)
         s = SBfromVar(name, type);
     }
 
-    STSadd(STS, name, s);
+    STinsert(CURRENT_SCOPE, name, s);
 
     // Clean up - note: free function does not (yet) free internal ids list
     IDLfree(&IDL);
@@ -550,7 +553,7 @@ node_st *CTAglobdef(node_st *node)
     const ValueType type = valuetype_from_nt(GLOBDEF_TYPE(node), false);
 
     Symbol* s = SBfromVar(name, type);
-    STSadd(STS, name, s);
+    STinsert(CURRENT_SCOPE, name, s);
 
     // Save information to array symbol
     DimsList* dml = DLSpeekTop(DLS);
@@ -602,7 +605,7 @@ node_st *CTAparam(node_st *node)
 
     // Add parameter as variable to scope
     Symbol* s = SBfromVar(param_name, param_type);
-    STSadd(STS, param_name, s);
+    STinsert(CURRENT_SCOPE, param_name, s);
 
     if (is_array) {
         // Add array properties
@@ -610,8 +613,8 @@ node_st *CTAparam(node_st *node)
     }
 
     // Add parameter to the function it belongs to
-    char* fun_name = STScurrentScopeName(STS);
-    Symbol* parent_fun = STSlookup(STS, fun_name);
+    char* fun_name = CURRENT_SCOPE->parent_fun->name;
+    Symbol* parent_fun = STlookup(CURRENT_SCOPE, fun_name);
     SBaddParam(parent_fun, param_type, IDL->size);
 
     IDLfree(&IDL);
@@ -641,7 +644,7 @@ node_st *CTAvardecl(node_st *node)
 
     // Create and add symbol to scope
     Symbol* s = SBfromVar(name, type);
-    STSadd(STS, name, s);
+    STinsert(CURRENT_SCOPE, name, s);
 
     if (is_array) {
         // Save information to array symbol
@@ -783,7 +786,7 @@ node_st *CTAvarlet(node_st *node)
     char* name = VARLET_NAME(node);
 
     // Look up variable
-    Symbol* s = STSlookup(STS, name);
+    const Symbol* s = STlookup(CURRENT_SCOPE, name);
 
     // Handle case of missing symbol
     HANDLE_MISSING_SYMBOL(name, s);
@@ -826,7 +829,7 @@ node_st *CTAvar(node_st *node)
     char* name = VAR_NAME(node);
 
     // Look up variable
-    Symbol* s = STSlookup(STS, name);
+    const Symbol* s = STlookup(CURRENT_SCOPE, name);
 
     // Handle case of missing symbol
     HANDLE_MISSING_SYMBOL(name, s);

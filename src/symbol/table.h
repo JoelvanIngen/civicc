@@ -11,7 +11,7 @@ typedef struct SymbolTable {
     htable_st* table;                   // Hashtable mapping symbol name to its properties
 } SymbolTable;
 
-SymbolTable* STnew(char* name, ValueType type);
-void STfree(SymbolTable** st);
+SymbolTable* STnew(SymbolTable* parent_table, Symbol* parent_symbol);
+void STfree(SymbolTable** st_ptr);
 void STinsert(const SymbolTable* st, char* name, Symbol* sym);
 Symbol* STlookup(const SymbolTable* st, char* name);

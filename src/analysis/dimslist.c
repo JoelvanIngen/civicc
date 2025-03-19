@@ -6,14 +6,13 @@ DimsList* DMLnew() {
     DimsList* dml = MEMmalloc(sizeof(DimsList));
     dml->size = 0;
     dml->capacity = VARTABLE_STACK_SIZE;
-    dml->dims = MEMmalloc(dml->capacity * sizeof(char*));
+    dml->dims = MEMmalloc(dml->capacity * sizeof(size_t*));
     return dml;
 }
 
-// Does NOT free the ID array, since it is meant to be re-assigned
-// to different, existing struct
 void DMLfree(DimsList** dml_ptr) {
     DimsList* dml = *dml_ptr;
+    MEMfree(dml->dims);
     MEMfree(dml);
     *dml_ptr = NULL;
 }
