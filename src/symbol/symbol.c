@@ -5,16 +5,17 @@
 #include "common.h"
 #include "scopetree.h"
 
-static Symbol* SBnew(char* name, const ValueType vt) {
+static Symbol* SBnew(char* name, const ValueType vt, const bool imported) {
     Symbol* s = MEMmalloc(sizeof(Symbol));
     s->vtype = vt;
     s->name = STRcpy(name);
+    s->imported = imported;
     s->parent_scope = NULL;
     return s;
 }
 
-Symbol* SBfromFun(char* name, const ValueType vt) {
-    Symbol* s = SBnew(name, vt);
+Symbol* SBfromFun(char* name, const ValueType vt, const bool imported) {
+    Symbol* s = SBnew(name, vt, imported);
     s->stype = ST_FUNCTION;
     s->as.fun.param_count = 0;
     s->as.fun.param_types = MEMmalloc(INITIAL_LIST_SIZE * sizeof(ValueType));
@@ -22,8 +23,8 @@ Symbol* SBfromFun(char* name, const ValueType vt) {
     return s;
 }
 
-Symbol* SBfromArray(char* name, const ValueType vt) {
-    Symbol* s = SBnew(name, vt);
+Symbol* SBfromArray(char* name, const ValueType vt, const bool imported) {
+    Symbol* s = SBnew(name, vt, imported);
     s->stype = ST_ARRAYVAR;
     s->as.array.dim_count = 0;
     s->as.array.capacity = INITIAL_LIST_SIZE;
@@ -31,8 +32,8 @@ Symbol* SBfromArray(char* name, const ValueType vt) {
     return s;
 }
 
-Symbol* SBfromVar(char* name, const ValueType vt) {
-    Symbol* s = SBnew(name, vt);
+Symbol* SBfromVar(char* name, const ValueType vt, const bool imported) {
+    Symbol* s = SBnew(name, vt, imported);
     s->stype = ST_VALUEVAR;
     return s;
 }
