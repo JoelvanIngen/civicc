@@ -14,5 +14,5 @@ typedef struct SymbolTable {
 
 SymbolTable* STnew(SymbolTable* parent_table, Symbol* parent_symbol);
 void STfree(SymbolTable** st_ptr);
-void STinsert(const SymbolTable* st, char* name, Symbol* sym);
+void STinsert(SymbolTable* st, char* name, Symbol* sym);
 Symbol* STlookup(const SymbolTable* st, char* name);

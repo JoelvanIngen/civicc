@@ -9,7 +9,7 @@ static Symbol* SBnew(char* name, const ValueType vt) {
     Symbol* s = MEMmalloc(sizeof(Symbol));
     s->vtype = vt;
     s->name = STRcpy(name);
-    s->scope = NULL;
+    s->parent_scope = NULL;
     return s;
 }
 

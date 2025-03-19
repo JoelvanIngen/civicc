@@ -30,15 +30,16 @@ void STfree(SymbolTable** st_ptr) {
     *st_ptr = NULL;
 }
 
-void STinsert(const SymbolTable* st, char* name, Symbol* sym) {
+void STinsert(SymbolTable* st, char* name, Symbol* sym) {
     if (HTlookup(st->table, name) != NULL) {
         USER_ERROR("Symbol %s already exists, but is redefined", name);
         return;
     }
 
 #ifdef DEBUGGING
-    ASSERT_MSG((sym->scope == NULL), "Trying to assign scope to symbol, but it was already assigned");
+    ASSERT_MSG((sym->parent_scope == NULL), "Trying to assign scope to symbol, but it was already assigned");
 #endif // DEBUGGING
+    sym->parent_scope = st;
     HTinsert(st->table, STRcpy(name), sym);
 }
 
