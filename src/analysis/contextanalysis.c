@@ -9,6 +9,8 @@
 
 // TODO: Unify all additions to scope to single helper function
 // - to reduce clutter and duplicate code
+// TODO: Find method to count amount of array init entries,
+// and push scope's offset counter by that amount
 
 #include "ccn/ccn.h"
 #include "ccngen/ast.h"
