@@ -19,11 +19,12 @@ void STfree(SymbolTable** st_ptr) {
     for (htable_iter_st *iter = HTiterate(st->table); iter;
             iter = HTiterateNext(iter)) {
 
-        void *key = HTiterKey(iter);
+        char* key = HTiterKey(iter);
+        Symbol* value = HTiterValue(iter);
+        
         MEMfree(key);
         key = NULL;
-        void *value = HTiterValue(iter);
-        SBfree((Symbol**) &value);
+        SBfree(&value);
     }
 
     HTdelete(st->table);
