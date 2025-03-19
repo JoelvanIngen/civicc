@@ -29,26 +29,26 @@ typedef enum {
     ANALYSIS_PASS,
 } PassType;
 
-PassType PASS;
-ValueType last_type;
+static PassType PASS;
+static ValueType last_type;
 
 // Current scope in the tree
-SymbolTable* CURRENT_SCOPE;
+static SymbolTable* CURRENT_SCOPE;
 
 // Stacking nested function calls
-ArgListStack* ALS;
+static ArgListStack* ALS;
 
 // Stacking nested array indexing
-DimsListStack* DLS;
+static DimsListStack* DLS;
 
 // Flag to determine if we are saving indexes to stack
-bool SAVING_IDXS = false;
+static bool SAVING_IDXS = false;
 
 // Listing parameter dimensions
-IdList* IDL = NULL;
+static IdList* IDL = NULL;
 
 // Keeps track of whether we had an error during analysis
-bool HAD_ERROR = false;
+static bool HAD_ERROR = false;
 
 #define IS_ARITH_TYPE(vt) (vt == VT_NUM || vt == VT_FLOAT)
 #define IS_ARRAY(vt) (vt == VT_NUMARRAY || vt == VT_FLOATARRAY || vt == VT_BOOLARRAY)

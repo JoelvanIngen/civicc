@@ -18,10 +18,10 @@
 #include "symbol/scopetree.h"
 #include "symbol/table.h"
 
-FILE* ASM_FILE;
-Assembly ASM;
+static FILE* ASM_FILE;
+static Assembly ASM;
 
-SymbolTable* CURRENT_SCOPE;
+static SymbolTable* CURRENT_SCOPE;
 
 static void init() {
     // TODO: probably make filename command-line argument
