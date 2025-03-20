@@ -47,6 +47,7 @@ typedef struct {
 
 void ASMinit(Assembly* assembly);
 void ASMfree(Assembly** assembly_ptr);
-void ASMemitInstr(Assembly* assembly, char* instr_name, char* arg0, char* arg1, char* arg2, bool is_label);
+void ASMemitInstr(Assembly* assembly, char* instr_name, char* arg0, char* arg1, char* arg2);
+void ASMemitLabel(Assembly* assembly, char* label);
 void ASMemitConst(Assembly* assembly, char* type, char* val);
 void ASMemitFunExport(Assembly* assembly, char* name, char* type, char** args, bool is_main);

@@ -21,7 +21,7 @@ void STfree(SymbolTable** st_ptr) {
 
         char* key = HTiterKey(iter);
         Symbol* value = HTiterValue(iter);
-        
+
         MEMfree(key);
         key = NULL;
         SBfree(&value);

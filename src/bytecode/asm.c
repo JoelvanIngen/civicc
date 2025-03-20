@@ -103,13 +103,19 @@ void ASMfree(Assembly** assembly_ptr) {
     *assembly_ptr = NULL;
 }
 
-void ASMemitInstr(Assembly* assembly, char* instr_name, char* arg0, char* arg1, char* arg2, bool is_label) {
+void ASMemitInstr(Assembly* assembly, char* instr_name, char* arg0, char* arg1, char* arg2) {
     Instruction* instr = new_instruction(assembly);
-    strcpy(instr->instr, instr_name);
-    instr->is_label = is_label;
-    instr->arg0 = arg0 ? strdup(arg0) : NULL;
-    instr->arg1 = arg1 ? strdup(arg1) : NULL;
-    instr->arg2 = arg2 ? strdup(arg2) : NULL;
+    instr->instr = STRcpy(instr_name);
+    instr->is_label = false;
+    instr->arg0 = arg0 ? STRcpy(arg0) : NULL;
+    instr->arg1 = arg1 ? STRcpy(arg1) : NULL;
+    instr->arg2 = arg2 ? STRcpy(arg2) : NULL;
+}
+
+void ASMemitLabel(Assembly* assembly, char* label) {
+    Instruction* instr = new_instruction(assembly);
+    instr->instr = STRcpy(label);
+    instr->is_label = true;
 }
 
 void ASMemitConst(Assembly* assembly, char* type, char* val) {
