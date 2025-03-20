@@ -409,7 +409,7 @@ node_st *CTAfundef(node_st *node)
 
     if (PASS == DECLARATION_PASS) {
         /* First pass: only return information about self */
-        Symbol* s = SBfromFun(fun_name, ret_type);
+        Symbol* s = SBfromFun(fun_name, ret_type, false);
         s->as.fun.scope = STnew(CURRENT_SCOPE, s);
         STinsert(CURRENT_SCOPE, fun_name, s);
     } else {
@@ -492,7 +492,7 @@ node_st *CTAfor(node_st *node)
 
     char* name = FOR_VAR(node);
 
-    Symbol* s = SBfromVar(name, VT_NUM);
+    Symbol* s = SBfromVar(name, VT_NUM, false);
     STinsert(CURRENT_SCOPE, name, s);
 
     TRAVchildren(node);
@@ -525,10 +525,10 @@ node_st *CTAglobdecl(node_st *node)
     const ValueType type = valuetype_from_nt(GLOBDECL_TYPE(node), is_array);
 
     if (is_array) {
-        s = SBfromArray(name, type);
+        s = SBfromArray(name, type, true);
         s->as.array.dim_count = IDL->size;
     } else {
-        s = SBfromVar(name, type);
+        s = SBfromVar(name, type, true);
     }
 
     STinsert(CURRENT_SCOPE, name, s);
@@ -556,7 +556,7 @@ node_st *CTAglobdef(node_st *node)
     // Add self to vartable of current scope
     const ValueType type = valuetype_from_nt(GLOBDEF_TYPE(node), false);
 
-    Symbol* s = SBfromVar(name, type);
+    Symbol* s = SBfromVar(name, type, false);
     STinsert(CURRENT_SCOPE, name, s);
 
     // Save information to array symbol
@@ -608,7 +608,8 @@ node_st *CTAparam(node_st *node)
     const ValueType param_type = valuetype_from_nt(PARAM_TYPE(node), is_array);
 
     // Add parameter as variable to scope
-    Symbol* s = SBfromVar(param_name, param_type);
+    // TODO: Verify that param identifier cannot be imported (unless size is specified externally)
+    Symbol* s = SBfromVar(param_name, param_type, false);
     STinsert(CURRENT_SCOPE, param_name, s);
 
     if (is_array) {
@@ -647,7 +648,7 @@ node_st *CTAvardecl(node_st *node)
     const ValueType type = valuetype_from_nt(VARDECL_TYPE(node), is_array);
 
     // Create and add symbol to scope
-    Symbol* s = SBfromVar(name, type);
+    Symbol* s = SBfromVar(name, type, false);
     STinsert(CURRENT_SCOPE, name, s);
 
     if (is_array) {
