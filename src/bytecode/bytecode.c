@@ -86,6 +86,18 @@ char* generate_unique_fun_name(const Symbol* s) {
     return safe_concat_str("_", name);
 }
 
+/**
+ * Generates a unique label name that is guaranteed not to collide with
+ * any existing names
+ * @param name name to append to unique part of name
+ * @return unique name
+ */
+char* generate_label_name(char* name) {
+    char* res = safe_concat_str("_", int_to_str((int) NUMBERED_LABEL_COUNT));
+    res = safe_concat_str(res, "_");
+    return safe_concat_str(res, name);
+}
+
 void add_importvars() {
     // Run loop multiple times to get the highest offset imported since they are not stored in order
     // in the hashtable, but they need to be written to the file in order
@@ -229,7 +241,39 @@ node_st *BCreturn(node_st *node)
  */
 node_st *BCfuncall(node_st *node)
 {
-    TRAVchildren(node);
+    // TODO: Find out difference between isr and isrl
+
+    const Symbol* s = ScopeTreeFind(CURRENT_SCOPE, FUNCALL_NAME(node));\
+#ifdef DEBUGGING
+    ASSERT_MSG((s != NULL), "BYTECODE: Could not find symbol named %s", FUNCALL_NAME(node));
+#endif // DEBUGGING
+
+    const size_t current_level = CURRENT_SCOPE->nesting_level;
+    const size_t fun_level = s->parent_scope->nesting_level;
+    const size_t fun_offset = s->offset;
+
+    char* instr = NULL;
+    if (fun_level == 0) {
+        Instr("isrg", NULL, NULL, NULL);
+    } else if (current_level == fun_level) {
+        Instr("isr", NULL, NULL, NULL);
+    } else {
+#ifdef DEBUGGING
+        ASSERT_MSG((current_level > fun_level), "Calling function from higher scope %lu compared to own scope %lu",
+            fun_level, current_level);
+#endif // DEBUGGING
+        Instr("isr", int_to_str((int) (current_level - fun_level)), NULL, NULL);
+    }
+
+    TRAVexprs(node);
+
+    // TODO: Create is_extern field in symbol
+    if (s->is_extern) {
+        Instr("jsre", int_to_str((int) s->offset), NULL, NULL);
+    } else {
+        // TODO: Put function in list and refer to offset for arg1
+        Instr("jsr", int_to_str((int) s->as.fun.param_count), NULL, NULL);
+    }
 
     /**
      * For each argument:
@@ -246,6 +290,19 @@ node_st *BCfuncall(node_st *node)
 node_st *BCcast(node_st *node)
 {
     TRAVchildren(node);
+
+    if (LAST_TYPE == VT_NUM && CAST_TYPE(node) == CT_float) {
+        Instr("i2f", NULL, NULL, NULL);
+        LAST_TYPE = VT_FLOAT;
+    } else if (LAST_TYPE == VT_FLOAT && CAST_TYPE(node) == CT_int) {
+        Instr("f2i", NULL, NULL, NULL);
+        LAST_TYPE = VT_NUM;
+    } else {
+        // Should never occur
+#ifdef DEBUGGING
+        ERROR("Unexpected cast from VT type %i to CT type %i", LAST_TYPE, CAST_TYPE(node));
+#endif // DEBUGGING
+    }
 
     /**
      * Traverse children
@@ -319,7 +376,22 @@ node_st *BCfunbody(node_st *node)
  */
 node_st *BCifelse(node_st *node)
 {
-    TRAVchildren(node);
+    char* else_label_name = generate_label_name((char*) "else");
+    char* endif_label_name = generate_label_name((char*) "endif");
+
+    TRAVcond(node);
+
+    Instr("branch_f", else_label_name, NULL, NULL);
+
+    TRAVthen(node);
+
+    Instr("jump", endif_label_name, NULL, NULL);
+    Label(else_label_name);
+
+    TRAVelse_block(node);
+
+    MEMfree(else_label_name);
+    MEMfree(endif_label_name);
 
     /**
      * Traverse cond child
@@ -338,13 +410,29 @@ node_st *BCifelse(node_st *node)
  */
 node_st *BCwhile(node_st *node)
 {
-    TRAVchildren(node);
+    char* while_start_name = generate_label_name((char*) "while_loop_start");
+    char* while_end_name = generate_label_name((char*) "while_loop_end");
+
+    Label(while_start_name);
+
+    TRAVexpr(node);
+
+    Instr("branch_f", while_end_name, NULL, NULL);
+
+    TRAVblock(node);
+
+    Instr("jump", while_start_name, NULL, NULL);
+
+    Label(while_end_name);
+
+    MEMfree(while_start_name);
+    MEMfree(while_end_name);
 
     /**
      * Emit loop start label
-     * Traverse body
      * Traverse cond child
      * Emit jump to loop end label if false (expr will have resolved to boolean)
+     * Traverse body
      * Emit unconditional jump to loop start label
      * Emit loop end label
      */
@@ -356,16 +444,27 @@ node_st *BCwhile(node_st *node)
  */
 node_st *BCdowhile(node_st *node)
 {
-    TRAVchildren(node);
+    char* while_start_name = generate_label_name((char*) "while_loop_start");
+
+    Label(while_start_name);
+
+    TRAVblock(node);
+
+    TRAVexpr(node);
+
+    Instr("branch_t", while_start_name, NULL, NULL);
+
+    MEMfree(while_start_name);
 
     /**
      * Emit loop start label
+     * Traverse body
      * Traverse cond child
      * Emit jump to loop end label if false (expr will have resolved to boolean)
-     * Traverse body
      * Emit unconditional jump to loop start label
      * Emit loop end label
      */
+
     return node;
 }
 
@@ -374,7 +473,13 @@ node_st *BCdowhile(node_st *node)
  */
 node_st *BCfor(node_st *node)
 {
-    TRAVchildren(node);
+    char* for_loop_start_name = generate_label_name((char*) "for_loop_start");
+    char* for_loop_end_name = generate_label_name((char*) "for_loop_end");
+
+    // TODO: Find incremented variable + increment
+
+    MEMfree(for_loop_start_name);
+    MEMfree(for_loop_end_name);
 
     /**
      * Traverse init, cond and step children
@@ -493,6 +598,22 @@ node_st *BCbinop(node_st *node)
     const ValueType left_value = LAST_TYPE;
     TRAVright(node);
     const ValueType right_value = LAST_TYPE;
+
+#ifdef DEBUGGING
+    ASSERT_MSG((left_value == right_value), "Left value and right value of types %i and %i don't match",
+        left_value, right_value);
+#endif // DEBUGGING
+
+    char* instr;
+    switch (left_value) {
+        case VT_NUM: instr = "i"; break;
+        case VT_FLOAT: instr = "f"; break;
+        case VT_BOOL: instr = "b"; break;
+        default:  // Should never occur
+#ifdef DEBUGGING
+            ERROR("Unexpected binop valuetype %i", left_value);
+#endif
+    }
 
     switch (BINOP_OP(node)) {
         case BO_add:
