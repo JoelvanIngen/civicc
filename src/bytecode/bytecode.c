@@ -26,7 +26,6 @@ static Assembly ASM;
 static SymbolTable* CURRENT_SCOPE;
 
 static size_t CONST_COUNT = 0;
-static size_t IMPORTVAR_COUNT = 0;
 
 static size_t NUMBERED_LABEL_COUNT = 0;
 
@@ -37,8 +36,8 @@ void Instr(char* instr_name, char* arg0, char* arg1, char* arg2) {
     ASMemitInstr(&ASM, instr_name, arg0, arg1, arg2);
 }
 
-void Label(char* label) {
-    ASMemitLabel(&ASM, label);
+void Label(char* label, bool is_fun) {
+    ASMemitLabel(&ASM, label, is_fun);
 }
 
 char* float_to_str(const float f) {
@@ -83,7 +82,7 @@ char* generate_unique_fun_name(const Symbol* s) {
         name = safe_concat_str(s->name, name);
     }
 
-    return safe_concat_str("_", name);
+    return safe_concat_str(STRcpy("_"), name);
 }
 
 /**
@@ -93,8 +92,8 @@ char* generate_unique_fun_name(const Symbol* s) {
  * @return unique name
  */
 char* generate_label_name(char* name) {
-    char* res = safe_concat_str("_", int_to_str((int) NUMBERED_LABEL_COUNT));
-    res = safe_concat_str(res, "_");
+    char* res = safe_concat_str(STRcpy("_"), int_to_str((int) NUMBERED_LABEL_COUNT));
+    res = safe_concat_str(res, STRcpy("_"));
     return safe_concat_str(res, name);
 }
 
@@ -110,8 +109,8 @@ void add_importvars() {
             const Symbol *s = HTiterValue(iter);
 
             if (s->imported) {
-                if (s->offset > highest_found) highest_found = (int) s->offset;
-                if (s->offset == highest_saved + 1) {
+                if (s->offset > (size_t) highest_found) highest_found = (int) s->offset;
+                if (s->offset == (size_t) highest_saved + 1) {
                     // TODO: Save the thing
                     highest_saved++;
                 }
@@ -209,6 +208,21 @@ node_st *BCids(node_st *node)
 node_st *BCexprstmt(node_st *node)
 {
     TRAVchildren(node);
+
+    switch (LAST_TYPE) {
+        case VT_NUM: Instr("ipop", NULL, NULL, NULL); break;
+        case VT_FLOAT: Instr("fpop", NULL, NULL, NULL); break;
+        case VT_BOOL: Instr("bpop", NULL, NULL, NULL); break;
+        case VT_VOID: break;  // Special case: void function does not return anything to needs be popped
+        default:  // Should never occur
+#ifdef DEBUGGING
+            ERROR("Unexpected exprstmt type %i", LAST_TYPE);
+#endif // DEBUGGING
+    }
+
+    /**
+     * Pop value, it wasn't assigned to anything
+     */
     return node;
 }
 
@@ -243,7 +257,7 @@ node_st *BCfuncall(node_st *node)
 {
     // TODO: Find out difference between isr and isrl
 
-    const Symbol* s = ScopeTreeFind(CURRENT_SCOPE, FUNCALL_NAME(node));\
+    const Symbol* s = ScopeTreeFind(CURRENT_SCOPE, FUNCALL_NAME(node));
 #ifdef DEBUGGING
     ASSERT_MSG((s != NULL), "BYTECODE: Could not find symbol named %s", FUNCALL_NAME(node));
 #endif // DEBUGGING
@@ -252,7 +266,6 @@ node_st *BCfuncall(node_st *node)
     const size_t fun_level = s->parent_scope->nesting_level;
     const size_t fun_offset = s->offset;
 
-    char* instr = NULL;
     if (fun_level == 0) {
         Instr("isrg", NULL, NULL, NULL);
     } else if (current_level == fun_level) {
@@ -262,17 +275,22 @@ node_st *BCfuncall(node_st *node)
         ASSERT_MSG((current_level > fun_level), "Calling function from higher scope %lu compared to own scope %lu",
             fun_level, current_level);
 #endif // DEBUGGING
-        Instr("isr", int_to_str((int) (current_level - fun_level)), NULL, NULL);
+        char* delta_level = int_to_str((int) (current_level - fun_level));
+        Instr("isr", delta_level, NULL, NULL);
+        MEMfree(delta_level);
     }
 
     TRAVexprs(node);
 
-    // TODO: Create is_extern field in symbol
-    if (s->is_extern) {
-        Instr("jsre", int_to_str((int) s->offset), NULL, NULL);
+    if (s->imported) {
+        char* offset_str = int_to_str((int) s->offset);
+        Instr("jsre", offset_str, NULL, NULL);
+        MEMfree(offset_str);
     } else {
         // TODO: Put function in list and refer to offset for arg1
+        char* param_count_str = int_to_str((int) s->as.fun.param_count);
         Instr("jsr", int_to_str((int) s->as.fun.param_count), NULL, NULL);
+        MEMfree(param_count_str);
     }
 
     /**
@@ -342,7 +360,7 @@ node_st *BCfundef(node_st *node)
     CURRENT_SCOPE = prev_scope;
 
     /**
-    * Do nothing?
+    * Switch scopes
     */
     return node;
 }
@@ -354,8 +372,11 @@ node_st *BCfunbody(node_st *node)
 {
     TRAVlocal_fundefs(node);
 
-    Label(generate_unique_fun_name(CURRENT_SCOPE->parent_fun));
-    Instr("esr", int_to_str((int) CURRENT_SCOPE->offset_counter), NULL, NULL);
+    Label(generate_unique_fun_name(CURRENT_SCOPE->parent_fun), true);
+
+    char* offset_str = int_to_str((int) CURRENT_SCOPE->offset_counter);
+    Instr("esr", offset_str, NULL, NULL);
+    MEMfree(offset_str);
 
     TRAVdecls(node);
     TRAVstmts(node);
@@ -376,8 +397,8 @@ node_st *BCfunbody(node_st *node)
  */
 node_st *BCifelse(node_st *node)
 {
-    char* else_label_name = generate_label_name((char*) "else");
-    char* endif_label_name = generate_label_name((char*) "endif");
+    char* else_label_name = generate_label_name(STRcpy("else"));
+    char* endif_label_name = generate_label_name(STRcpy("endif"));
 
     TRAVcond(node);
 
@@ -386,7 +407,7 @@ node_st *BCifelse(node_st *node)
     TRAVthen(node);
 
     Instr("jump", endif_label_name, NULL, NULL);
-    Label(else_label_name);
+    Label(else_label_name, false);
 
     TRAVelse_block(node);
 
@@ -410,10 +431,10 @@ node_st *BCifelse(node_st *node)
  */
 node_st *BCwhile(node_st *node)
 {
-    char* while_start_name = generate_label_name((char*) "while_loop_start");
-    char* while_end_name = generate_label_name((char*) "while_loop_end");
+    char* while_start_name = generate_label_name(STRcpy("while_loop_start"));
+    char* while_end_name = generate_label_name(STRcpy("while_loop_end"));
 
-    Label(while_start_name);
+    Label(while_start_name, false);
 
     TRAVexpr(node);
 
@@ -423,7 +444,7 @@ node_st *BCwhile(node_st *node)
 
     Instr("jump", while_start_name, NULL, NULL);
 
-    Label(while_end_name);
+    Label(while_end_name, false);
 
     MEMfree(while_start_name);
     MEMfree(while_end_name);
@@ -444,9 +465,9 @@ node_st *BCwhile(node_st *node)
  */
 node_st *BCdowhile(node_st *node)
 {
-    char* while_start_name = generate_label_name((char*) "while_loop_start");
+    char* while_start_name = generate_label_name(STRcpy("while_loop_start"));
 
-    Label(while_start_name);
+    Label(while_start_name, false);
 
     TRAVblock(node);
 
@@ -473,8 +494,8 @@ node_st *BCdowhile(node_st *node)
  */
 node_st *BCfor(node_st *node)
 {
-    char* for_loop_start_name = generate_label_name((char*) "for_loop_start");
-    char* for_loop_end_name = generate_label_name((char*) "for_loop_end");
+    char* for_loop_start_name = generate_label_name(STRcpy("for_loop_start"));
+    char* for_loop_end_name = generate_label_name(STRcpy("for_loop_end"));
 
     // TODO: Find incremented variable + increment
 
@@ -592,8 +613,6 @@ node_st *BCassign(node_st *node)
  */
 node_st *BCbinop(node_st *node)
 {
-    // TODO: Finish implementation
-
     TRAVleft(node);
     const ValueType left_value = LAST_TYPE;
     TRAVright(node);
@@ -606,9 +625,9 @@ node_st *BCbinop(node_st *node)
 
     char* instr;
     switch (left_value) {
-        case VT_NUM: instr = "i"; break;
-        case VT_FLOAT: instr = "f"; break;
-        case VT_BOOL: instr = "b"; break;
+        case VT_NUM: instr = STRcpy("i"); break;
+        case VT_FLOAT: instr = STRcpy("f"); break;
+        case VT_BOOL: instr = STRcpy("b"); break;
         default:  // Should never occur
 #ifdef DEBUGGING
             ERROR("Unexpected binop valuetype %i", left_value);
@@ -617,36 +636,89 @@ node_st *BCbinop(node_st *node)
 
     switch (BINOP_OP(node)) {
         case BO_add:
+#ifdef DEBUGGING
+            if (left_value == VT_BOOL) ERROR("Addition was performed on boolean values");
+#endif // DEBUGGING
+            instr = safe_concat_str(instr, STRcpy("add"));
             break;
         case BO_sub:
+#ifdef DEBUGGING
+            if (left_value == VT_BOOL) ERROR("Subtraction was performed on boolean values");
+#endif // DEBUGGING
+            instr = safe_concat_str(instr, STRcpy("sub"));
             break;
         case BO_mul:
+#ifdef DEBUGGING
+            if (left_value == VT_BOOL) ERROR("Multiplication was performed on boolean values");
+#endif // DEBUGGING
+            instr = safe_concat_str(instr, STRcpy("mul"));
             break;
         case BO_div:
+#ifdef DEBUGGING
+            if (left_value == VT_BOOL) ERROR("Division was performed on boolean values");
+#endif // DEBUGGING
+            instr = safe_concat_str(instr, STRcpy("div"));
             break;
         case BO_mod:
+#ifdef DEBUGGING
+            if (left_value == VT_BOOL) ERROR("Modulo was performed on boolean values");
+            if (left_value == VT_FLOAT) ERROR("Modulo was performed on float values");
+#endif // DEBUGGING
+            instr = safe_concat_str(instr, STRcpy("rem"));
             break;
         case BO_lt:
+#ifdef DEBUGGING
+            if (left_value == VT_BOOL) ERROR("< operator was performed on boolean values");
+#endif // DEBUGGING
+            instr = safe_concat_str(instr, STRcpy("lt"));
             break;
         case BO_le:
+#ifdef DEBUGGING
+            if (left_value == VT_BOOL) ERROR("<= operator was performed on boolean values");
+#endif // DEBUGGING
+            instr = safe_concat_str(instr, STRcpy("le"));
             break;
         case BO_gt:
+#ifdef DEBUGGING
+            if (left_value == VT_BOOL) ERROR("> operator was performed on boolean values");
+#endif // DEBUGGING
+            instr = safe_concat_str(instr, STRcpy("gt"));
             break;
         case BO_ge:
+#ifdef DEBUGGING
+            if (left_value == VT_BOOL) ERROR(">= operator was performed on boolean values");
+#endif // DEBUGGING
+            instr = safe_concat_str(instr, STRcpy("ge"));
             break;
         case BO_eq:
+            instr = safe_concat_str(instr, STRcpy("eq"));
             break;
         case BO_ne:
+            instr = safe_concat_str(instr, STRcpy("ne"));
             break;
         case BO_and:
+#ifdef DEBUGGING
+            if (left_value == VT_NUM) ERROR("&& operator was performed on integer values");
+            if (left_value == VT_FLOAT) ERROR("&& operator was performed on float values");
+#endif // DEBUGGING
+            instr = safe_concat_str(instr, STRcpy("mul"));
             break;
         case BO_or:
+#ifdef DEBUGGING
+            if (left_value == VT_NUM) ERROR("|| operator was performed on integer values");
+            if (left_value == VT_FLOAT) ERROR("|| operator was performed on float values");
+#endif // DEBUGGING
+            instr = safe_concat_str(instr, STRcpy("add"));
             break;
         default:  // Should never happen
-#ifdef DEBUGGING:
+#ifdef DEBUGGING
             ERROR("Bytecode: Unexpected binop OP %i", BINOP_OP(node));
 #endif // DEBUGGING
     }
+
+    Instr(instr, NULL, NULL, NULL);
+
+    MEMfree(instr);
 
     /**
      * Emit instruction for correct operator
@@ -706,9 +778,9 @@ node_st *BCvarlet(node_st *node)
 
     char* instr = NULL;
     switch (s->vtype) {
-        case VT_NUM: instr = "i"; LAST_TYPE = VT_NUM; break;
-        case VT_FLOAT: instr = "f"; LAST_TYPE = VT_FLOAT; break;
-        case VT_BOOL: instr = "b"; LAST_TYPE = VT_BOOL; break;
+        case VT_NUM: instr = STRcpy("i"); LAST_TYPE = VT_NUM; break;
+        case VT_FLOAT: instr = STRcpy("f"); LAST_TYPE = VT_FLOAT; break;
+        case VT_BOOL: instr = STRcpy("b"); LAST_TYPE = VT_BOOL; break;
         // TODO: ARRAYS
         default:  // Should not occur
 #ifdef DEBUGGING
@@ -718,18 +790,22 @@ node_st *BCvarlet(node_st *node)
     }
 
     if (var_level == 0) {
-        if (s->imported) {
-            instr = safe_concat_str(instr, "storee");
-        } else {
-            instr = safe_concat_str(instr, "storeg");
-        }
+        char* tmp_instr;
+        if (s->imported) tmp_instr = STRcpy("storee");
+        else tmp_instr = STRcpy("storeg");
 
-        Instr(instr, int_to_str((int) var_offset), NULL, NULL);
+        instr = safe_concat_str(instr, tmp_instr);
+        char* var_offset_str = int_to_str((int) var_offset);
+        Instr(instr, var_offset_str, NULL, NULL);
+        MEMfree(var_offset_str);
     }
 
     else if (current_level == var_level) {
-        instr = safe_concat_str(instr, "store");
-        Instr(instr, int_to_str((int) var_offset), NULL, NULL);
+        instr = safe_concat_str(instr, STRcpy("store"));
+        char* var_offset_str = int_to_str((int) var_offset);
+        Instr(instr, var_offset_str, NULL, NULL);
+        MEMfree(instr);
+        MEMfree(var_offset_str);
     }
 
     else {
@@ -737,8 +813,10 @@ node_st *BCvarlet(node_st *node)
         ASSERT_MSG((current_level > var_level), "Calling variable from higher scope %lu compared to own scope %lu",
             var_level, current_level);
 #endif // DEBUGGING
-        instr = safe_concat_str(instr, "storen");
-        Instr(instr, int_to_str((int) (current_level - var_level)), int_to_str((int) var_offset), NULL);
+        instr = safe_concat_str(instr, STRcpy("storen"));
+        char* var_delta_str = int_to_str((int) (current_level - var_level));
+        Instr(instr, var_delta_str, int_to_str((int) var_offset), NULL);
+        MEMfree(var_delta_str);
     }
 
     /**
@@ -771,9 +849,9 @@ node_st *BCvar(node_st *node)
 
     char* instr = NULL;
     switch (s->vtype) {
-        case VT_NUM: instr = "i"; LAST_TYPE = VT_NUM; break;
-        case VT_FLOAT: instr = "f"; LAST_TYPE = VT_FLOAT; break;
-        case VT_BOOL: instr = "b"; LAST_TYPE = VT_BOOL; break;
+        case VT_NUM: instr = STRcpy("i"); LAST_TYPE = VT_NUM; break;
+        case VT_FLOAT: instr = STRcpy("f"); LAST_TYPE = VT_FLOAT; break;
+        case VT_BOOL: instr = STRcpy("b"); LAST_TYPE = VT_BOOL; break;
         // TODO: ARRAYS
         default:  // Should not occur
 #ifdef DEBUGGING
@@ -784,30 +862,34 @@ node_st *BCvar(node_st *node)
 
     if (var_level == 0) {
         if (s->imported) {
-            instr = safe_concat_str(instr, "loade");
+            instr = safe_concat_str(instr, STRcpy("loade"));
         } else {
-            instr = safe_concat_str(instr, "loadg");
+            instr = safe_concat_str(instr, STRcpy("loadg"));
         }
 
-        Instr(instr, int_to_str((int) var_offset), NULL, NULL);
+        char* var_offset_str = int_to_str((int) var_offset);
+        Instr(instr, var_offset_str, NULL, NULL);
+        MEMfree(var_offset_str);
     }
 
     else if (current_level == var_level) {
-        instr = safe_concat_str(instr, "load");
+        instr = safe_concat_str(instr, STRcpy("load"));
         if (var_offset <= 3) {
             switch (s->offset) {
-                case 0: instr = safe_concat_str(instr, "_0"); break;
-                case 1: instr = safe_concat_str(instr, "_1"); break;
-                case 2: instr = safe_concat_str(instr, "_2"); break;
-                case 3: instr = safe_concat_str(instr, "_3"); break;
+                case 0: instr = safe_concat_str(instr, STRcpy("_0")); break;
+                case 1: instr = safe_concat_str(instr, STRcpy("_1")); break;
+                case 2: instr = safe_concat_str(instr, STRcpy("_2")); break;
+                case 3: instr = safe_concat_str(instr, STRcpy("_3")); break;
                 default:  // Should never happen
 #ifdef DEBUGGING
-                    ERROR("Var with offset %lu was deemed to be within 0 and 3 inclusive");
+                    ERROR("Var with offset %lu was deemed to be within 0 and 3 inclusive", var_offset);
 #endif // DEBUGGING
             }
             Instr(instr, NULL, NULL, NULL);
         } else {
-            Instr(instr, int_to_str((int) var_offset), NULL, NULL);
+            char* var_offset_str = int_to_str((int) var_offset);
+            Instr(instr, var_offset_str, NULL, NULL);
+            MEMfree(var_offset_str);
         }
     }
 
@@ -816,8 +898,12 @@ node_st *BCvar(node_st *node)
         ASSERT_MSG((current_level > var_level), "Calling variable from higher scope %lu compared to own scope %lu",
             var_level, current_level);
 #endif // DEBUGGING
-        instr = safe_concat_str(instr, "loadn");
-        Instr(instr, int_to_str((int) (current_level - var_level)), int_to_str((int) var_offset), NULL);
+        instr = safe_concat_str(instr, STRcpy("loadn"));
+        char* delta_offset_str = int_to_str((int) (current_level - var_level));
+        char* var_offset_str = int_to_str((int) var_offset);
+        Instr(instr, delta_offset_str, var_offset_str, NULL);
+        MEMfree(delta_offset_str);
+        MEMfree(var_offset_str);
     }
 
     MEMfree(instr);
@@ -851,9 +937,16 @@ node_st *BCnum(node_st *node)
         case -1: Instr("iloadc_m1", NULL, NULL, NULL); break;
         case 0: Instr("iloadc_0", NULL, NULL, NULL); break;
         case 1: Instr("iloadc_1", NULL, NULL, NULL); break;
-        default:
-            ASMemitConst(&ASM, "int", int_to_str(v));
-        Instr("iloadc", int_to_str((int) CONST_COUNT++), NULL, NULL); break;
+        default: ;  // Don't remove this semicolon, it's here because a statement is expected
+                    // and the declaration after is not a statement so the semicolon serves
+                    // as an empty statement :)
+            char* v_str = int_to_str(v);
+            char* const_count_str = int_to_str((int) CONST_COUNT++);
+            ASMemitConst(&ASM, "int", v_str);
+            Instr("iloadc", const_count_str, NULL, NULL);
+            MEMfree(v_str);
+            MEMfree(const_count_str);
+            break;
     }
 
     LAST_TYPE = VT_NUM;
@@ -874,12 +967,13 @@ node_st *BCfloat(node_st *node)
      */
 
     const float v = FLOAT_VAL(node);
-    switch (v) {
-        case 0.0: Instr("floadc_0", NULL, NULL, NULL); break;
-        case 1.0: Instr("floadc_1", NULL, NULL, NULL); break;
-        default:
-            ASMemitConst(&ASM, "float", float_to_str(v));
-            Instr("floadc", int_to_str((int) CONST_COUNT++), NULL, NULL); break;
+    if (v == 0.0) Instr("floadc_0", NULL, NULL, NULL);
+    else if (v == 1.0) Instr("floadc_1", NULL, NULL, NULL);
+    else {
+        ASMemitConst(&ASM, "float", float_to_str(v));
+        char* const_count_str = int_to_str((int) CONST_COUNT++);
+        Instr("floadc", const_count_str, NULL, NULL);
+        MEMfree(const_count_str);
     }
 
     LAST_TYPE = VT_FLOAT;

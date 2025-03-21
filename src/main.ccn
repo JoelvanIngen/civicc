@@ -9,6 +9,7 @@ start phase RootPhase {
         pass SPdoScanParse;
         Print;
         ContextAnalysis;
+        ByteCodeGeneration;
     }
 };
 

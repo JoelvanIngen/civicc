@@ -112,22 +112,23 @@ void ASMemitInstr(Assembly* assembly, char* instr_name, char* arg0, char* arg1, 
     instr->arg2 = arg2 ? STRcpy(arg2) : NULL;
 }
 
-void ASMemitLabel(Assembly* assembly, char* label) {
+void ASMemitLabel(Assembly* assembly, char* label, bool is_fun) {
     Instruction* instr = new_instruction(assembly);
     instr->instr = STRcpy(label);
     instr->is_label = true;
+    instr->is_fun = is_fun;
 }
 
 void ASMemitConst(Assembly* assembly, char* type, char* val) {
     Constant* constant = new_constant(assembly);
     constant->type = type;
-    constant->value = val;
+    constant->value = STRcpy(val);
 }
 
 void ASMemitFunExport(Assembly* assembly, char* name, char* type, char** args, bool is_main) {
     FunExport* fun_export = new_fun_export(assembly);
-    strcpy(fun_export->name, name);
+    fun_export->name = STRcpy(name);
     fun_export->is_main = is_main;
-    strcpy(fun_export->type, type);
+    fun_export->type = STRcpy(type);
     fun_export->args = args;
 }

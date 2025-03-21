@@ -758,7 +758,7 @@ node_st *CTAbinop(node_st *node)
  */
 node_st *CTAmonop(node_st *node)
 {
-    TRAVexpr(node);
+    TRAVoperand(node);
 
     // Confirm type is correct
     switch (MONOP_OP(node)) {

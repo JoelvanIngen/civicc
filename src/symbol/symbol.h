@@ -42,7 +42,8 @@ typedef struct {
     ValueType vtype;
     char* name;
     size_t offset;                      // Offset within scope
-    bool imported;                      // True for imported variables
+    bool imported;                      // True for imported identifiers
+    bool exported;                      // True for exported identifiers
     struct SymbolTable* parent_scope;   // Scope this symbol is assigned to
     union {
         ArrayData array;
