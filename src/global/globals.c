@@ -6,7 +6,6 @@ struct globals global;
 /*
  * Initialize global variables from globals.mac
  */
-
 void GLBinitializeGlobals()
 {
     global.col = 0;
