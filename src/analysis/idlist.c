@@ -14,16 +14,21 @@ IdList* IDLnew() {
 // to different, existing struct
 void IDLfree(IdList** idl_ptr) {
     IdList* idl = *idl_ptr;
+
+    for (size_t i = 0; i < idl->size; i++) {
+        MEMfree(idl->ids[i]);
+    }
+
     MEMfree(idl);
     *idl_ptr = NULL;
 }
 
-void IDLadd(IdList* idl, const char* id) {
+void IDLadd(IdList* idl, char* id) {
     if (idl->size + 1 >= idl->capacity) {
         idl->capacity *= 2;
         ARRAY_RESIZE(idl->ids, idl->capacity);
     }
 
-    idl->ids[idl->size] = id;
+    idl->ids[idl->size] = STRcpy(id);
     idl->size++;
 }

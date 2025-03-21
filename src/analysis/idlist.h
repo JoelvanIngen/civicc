@@ -7,9 +7,9 @@
 typedef struct {
     size_t size;
     size_t capacity;
-    const char** ids;
+    char** ids;
 } IdList;
 
 IdList* IDLnew();
 void IDLfree(IdList** idl_ptr);
-void IDLadd(IdList* idl, const char* id);
+void IDLadd(IdList* idl, char* id);

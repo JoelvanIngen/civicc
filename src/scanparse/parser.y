@@ -17,6 +17,7 @@ extern int yylex();
 int yyerror(char *errname);
 extern FILE *yyin;
 void AddLocToNode(node_st *node, void *begin_loc, void *end_loc);
+node_st* reverse_vardecls(node_st* head);
 
 
 %}
@@ -191,8 +192,7 @@ localfundefs: localfundef localfundefs
 funbody: BRACE_L[startbrace] vardecls[decls] localfundefs[fundefs] stmts[sts] BRACE_R[endbrace]
           {
             $$ = ASTfunbody();
-            // TODO: Reverse vardecls linked list
-            FUNBODY_DECLS($$) = reversed($decls);
+            FUNBODY_DECLS($$) = reverse_vardecls($decls);
             FUNBODY_LOCAL_FUNDEFS($$) = $fundefs;
             FUNBODY_STMTS($$) = $sts;
             AddLocToNode($$, &@startbrace, &@endbrace);
@@ -420,8 +420,20 @@ type: INTTYPE   { $$ = CT_int; }
 
 %%
 
-// TODO
-node_st* reversed()
+node_st* reverse_vardecls(node_st* head) {
+  node_st* prev = NULL;
+  node_st* current = head;
+  node_st* next;
+
+  while (current != NULL) {
+    next = VARDECL_NEXT(current);
+    VARDECL_NEXT(current) = prev;
+    prev = current;
+    current = next;
+  }
+  
+  return prev;
+}
 
 void AddLocToNode(node_st *node, void *begin_loc, void *end_loc)
 {

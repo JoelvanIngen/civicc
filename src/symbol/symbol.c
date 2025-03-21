@@ -3,6 +3,7 @@
 #include "symbol.h"
 
 #include "common.h"
+#include "scopetree.h"
 
 
 /* Create new symbol struct to keep track of symbol information
@@ -21,11 +22,11 @@ static Symbol* SBnew() {
  *
  * Output: Pointer to symbol struct for a function
 */
-Symbol* SBfromFun(const char* name, const ValueType vt) {
+Symbol* SBfromFun(char* name, const ValueType vt) {
     Symbol* s = SBnew();
     s->stype = ST_FUNCTION;
     s->vtype = vt;
-    s->name = name;
+    s->name = STRcpy(name);
     s->as.fun.param_count = 0;
     s->as.fun.param_types = MEMmalloc(INITIAL_LIST_SIZE * sizeof(ValueType));
     s->as.fun.param_dim_counts = MEMmalloc(INITIAL_LIST_SIZE * sizeof(size_t));
@@ -40,11 +41,11 @@ Symbol* SBfromFun(const char* name, const ValueType vt) {
  *
  * Output: Pointer to symbol struct for an array
 */
-Symbol* SBfromArray(const char* name, const ValueType vt) {
+Symbol* SBfromArray(char* name, const ValueType vt) {
     Symbol* s = SBnew();
     s->stype = ST_ARRAYVAR;
     s->vtype = vt;
-    s->name = name;
+    s->name = STRcpy(name);
     s->as.array.dim_count = 0;
     s->as.array.capacity = INITIAL_LIST_SIZE;
     s->as.array.dims = MEMmalloc(s->as.array.capacity * sizeof(size_t));
@@ -59,36 +60,39 @@ Symbol* SBfromArray(const char* name, const ValueType vt) {
  *
  * Output: Pointer to symbol struct for an array
 */
-Symbol* SBfromVar(const char* name, const ValueType vt) {
+Symbol* SBfromVar(char* name, const ValueType vt) {
     Symbol* s = SBnew();
     s->stype = ST_VALUEVAR;
     s->vtype = vt;
-    s->name = name;
+    s->name = STRcpy(name);
     return s;
 }
 
 /* Free symbol struct for function or array. Vars don't need
  * their struct members free. See SBfromVar.abort
  *
- * s: Is of type &(s*) used to remove dangling vars and free memory.
+ * s_ptr: Is of type &(s*) used to remove dangling vars and free memory.
  *
  * Output: None
  * Side-effects: Memory is freed for *s and dangling variable is resolved
  * by setting *s = NULL.
 */
-void SBfree(Symbol** s) {
-    switch ((*s)->stype) {
+void SBfree(Symbol** s_ptr) {
+    Symbol* s = *s_ptr;
+    switch (s->stype) {
         case ST_FUNCTION:
-            MEMfree((*s)->as.fun.param_types);
-            MEMfree((*s)->as.fun.param_dim_counts);
+            MEMfree(s->as.fun.param_types);
+            MEMfree(s->as.fun.param_dim_counts);
+            STfree(&s->as.fun.scope);
             break;
         case ST_ARRAYVAR:
-            MEMfree((*s)->as.array.dims); break;
+            MEMfree(s->as.array.dims); break;
         default: break;
     }
 
-    MEMfree(*s);
-    *s = NULL;
+    MEMfree(s->name);
+    MEMfree(s);
+    *s_ptr = NULL;
 }
 
 /* Add dimension to array by reallocating and storing
