@@ -715,7 +715,12 @@ node_st *CTAassign(node_st *node)
 
     // Numbers are compatible, although implicit casting will take place
     if (let_is_arith && expr_is_arith) {
-        // If either argument is float, int is implicitly cast otherwise num
+        // If types are both arith but not same, implicit conversion takes place
+        if (let_type == VT_NUM && expr_type == VT_FLOAT) {
+            ASSIGN_EXPR(node) = ASTcast(ASSIGN_EXPR(node), CT_int);
+        } else if (let_type == VT_FLOAT && expr_type == VT_NUM) {
+            ASSIGN_EXPR(node) = ASTcast(ASSIGN_EXPR(node), CT_float);
+        }
         last_type = let_type == VT_FLOAT || expr_type == VT_FLOAT ? VT_FLOAT : VT_NUM;
     }
 
