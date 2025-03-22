@@ -81,7 +81,7 @@ typedef struct {
 
 typedef struct ConstEntry {             // Used for finding and retrieving values already written to ASM
     size_t offset;                      // Offset in final written ASM
-    Constant* get;                     // The result itself
+    Constant* get;                      // The result itself
 } ConstEntry;
 
 typedef struct FunExportEntry {
