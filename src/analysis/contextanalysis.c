@@ -713,7 +713,7 @@ node_st *CTAassign(node_st *node)
     const ValueType expr_type = last_type;
     const bool expr_is_arith = IS_ARITH_TYPE(expr_type);
 
-    // Numbers are compatible, although implicit casting will take place
+    // Numbers are compatible
     if (let_is_arith && expr_is_arith) {
         // If types are both arith but not same, implicit conversion takes place
         if (let_type == VT_NUM && expr_type == VT_FLOAT) {
