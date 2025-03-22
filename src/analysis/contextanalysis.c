@@ -409,25 +409,34 @@ node_st *CTAfundef(node_st *node)
 
     if (PASS == DECLARATION_PASS) {
         /* First pass: only return information about self */
-        Symbol* s = SBfromFun(fun_name, ret_type, false);
-        s->as.fun.scope = STnew(CURRENT_SCOPE, s);
+        const bool is_extern = FUNDEF_IS_EXTERN(node);
+        Symbol* s = SBfromFun(fun_name, ret_type, is_extern);
+
+        if (!is_extern) {
+            s->as.fun.scope = STnew(CURRENT_SCOPE, s);
+        }
+
         STinsert(CURRENT_SCOPE, fun_name, s);
     } else {
         /* Second pass: explore information about own statements
          * Here we also detect if variables are wrongly typed */
 
-        // Switch to new scope
         const Symbol* s = STlookup(CURRENT_SCOPE, fun_name);
-        CURRENT_SCOPE = s->as.fun.scope;
 
-        // Add parameters to scope
-        TRAVparams(node);
+        // Only explore if not extern
+        if (!s->imported) {
+            // Switch to new scope
+            CURRENT_SCOPE = s->as.fun.scope;
 
-        // Explore function body
-        TRAVbody(node);
+            // Add parameters to scope
+            TRAVparams(node);
 
-        // Switch back to parent scope
-        CURRENT_SCOPE = CURRENT_SCOPE->parent_scope;
+            // Explore function body
+            TRAVbody(node);
+
+            // Switch back to parent scope
+            CURRENT_SCOPE = CURRENT_SCOPE->parent_scope;
+        }
     }
 
     return node;
