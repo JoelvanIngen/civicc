@@ -30,19 +30,16 @@ typedef struct Constant {
 } Constant;
 
 typedef struct FunExport {
-    char* name;                 // Name of exported function
+    char* name;                 // Name of exported function, also label name
     char* ret_type;             // Return type of function
     size_t arg_amount;
     char** args;                // Argument types
-    char* label_name;           // Label name as labelled in instructions
-    bool is_main;               // From example, it seems "main" should be appended if function is main?
-    bool is_init;               // From example, it seems "__init" should be appended for some stuff?
     struct FunExport* next;
 } FunExport;
 
 typedef struct VarExport {
     char* name;
-    size_t index;               // Index of var at global table
+    size_t global_index;        // Index of var at global table
     struct VarExport* next;
 } VarExport;
 
@@ -82,9 +79,27 @@ typedef struct {
     VarImport* last_var_import;
 } Assembly;
 
+typedef struct ConstEntry {             // Used for finding and retrieving values already written to ASM
+    size_t offset;                      // Offset in final written ASM
+    Constant* get;                     // The result itself
+} ConstEntry;
+
+typedef struct FunExportEntry {
+    size_t offset;
+    FunExport* get;
+} FunExportEntry;
+
 void ASMinit(Assembly* assembly);
 void ASMfree(Assembly** assembly_ptr);
+
 void ASMemitInstr(Assembly* assembly, char* instr_name, char* arg0, char* arg1, char* arg2);
 void ASMemitLabel(Assembly* assembly, char* label, bool is_fun);
 void ASMemitConst(Assembly* assembly, char* type, char* val);
-void ASMemitFunExport(Assembly* assembly, char* name, char* type, char** args, bool is_main);
+void ASMemitFunExport(Assembly* assembly, char* name, char* ret_type, size_t arglen, char** args);
+void ASMemitVarExport(Assembly* assembly, char* name, size_t glob_index);
+void ASMemitGlobVar(Assembly* assembly, char* type);
+void ASMemitFunImport(Assembly* assembly, char* name, char* ret_type, size_t arg_amount, char** args);
+void ASMemitVarImport(Assembly* assembly, char* name, char* type);
+
+ConstEntry ASMfindConstant(const Assembly* assembly, const char* value);
+FunExportEntry ASMfindFunExport(const Assembly* assembly, const char* name);

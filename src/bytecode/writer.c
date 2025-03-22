@@ -5,9 +5,9 @@
 bool WRITTEN_FIRST_LABEL = false;
 
 static void write_single_instruction(FILE* f, const Instruction* instruction) {
-    if (instruction->is_label && instruction->is_fun) {
+    if (instruction->is_label) {
         // Write extra newline for functions, but not if this is the first label
-        if (WRITTEN_FIRST_LABEL) fprintf(f, "\n");
+        if (WRITTEN_FIRST_LABEL && instruction->is_fun) fprintf(f, "\n");
         else WRITTEN_FIRST_LABEL = true;
 
         // Write name followed by colon
@@ -54,8 +54,7 @@ static void write_single_fun_export(FILE* f, const FunExport* export) {
     //     fprintf(f, " %s", export->args[i]);
     // }
 
-    if (export->is_main) fprintf(f, " main");
-    else if (export->is_init) fprintf(f, " __init");
+    fprintf(f, " %s", export->name);
 }
 
 static void write_fun_exports(FILE* f, const FunExport* export) {
@@ -67,7 +66,7 @@ static void write_fun_exports(FILE* f, const FunExport* export) {
 }
 
 static void write_single_var_export(FILE* f, const VarExport* export) {
-    fprintf(f, ".exportvar \"%s\" %lu", export->name, export->index);
+    fprintf(f, ".exportvar \"%s\" %lu", export->name, export->global_index);
 }
 
 static void write_var_exports(FILE* f, const VarExport* export) {
@@ -79,7 +78,7 @@ static void write_var_exports(FILE* f, const VarExport* export) {
 }
 
 static void write_single_globvar(FILE* f, const GlobVar* globvar) {
-    fprintf(".global %s", globvar->type);
+    fprintf(f, ".global %s", globvar->type);
 }
 
 static void write_globvars(FILE* f, const GlobVar* globvar) {
@@ -108,7 +107,7 @@ static void write_fun_imports(FILE* f, const FunImport* import) {
 }
 
 static void write_single_var_import(FILE* f, const VarImport* import) {
-    fprintf(".importvar \"%s\" %s", import->name, import->type);
+    fprintf(f, ".importvar \"%s\" %s", import->name, import->type);
 }
 
 static void write_var_imports(FILE* f, const VarImport* import) {

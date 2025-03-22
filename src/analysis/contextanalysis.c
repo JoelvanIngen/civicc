@@ -620,6 +620,7 @@ node_st *CTAparam(node_st *node)
     // TODO: Verify that param identifier cannot be imported (unless size is specified externally)
     Symbol* s = SBfromVar(param_name, param_type, false);
     STinsert(CURRENT_SCOPE, param_name, s);
+    s->offset = CURRENT_SCOPE->parent_fun->offset++;
 
     if (is_array) {
         // Add array properties
@@ -659,6 +660,7 @@ node_st *CTAvardecl(node_st *node)
     // Create and add symbol to scope
     Symbol* s = SBfromVar(name, type, false);
     STinsert(CURRENT_SCOPE, name, s);
+    s->offset = CURRENT_SCOPE->parent_fun->offset++;
 
     if (is_array) {
         // Save information to array symbol

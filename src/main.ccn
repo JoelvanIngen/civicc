@@ -187,7 +187,8 @@ node FunDef {
     attributes {
         string name { constructor },
         Type type { constructor },
-        bool export
+        bool export,
+        bool is_extern
     }
 };
 

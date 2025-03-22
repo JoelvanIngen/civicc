@@ -20,6 +20,8 @@
 
 #define MAX_STR_LEN 100
 
+static char* VT_TO_STR[] = {"int", "float", "bool", "void", "num[]", "float[]", "bool[]"};
+
 static FILE* ASM_FILE;
 static Assembly ASM;
 
@@ -30,6 +32,7 @@ static size_t CONST_COUNT = 0;
 static size_t NUMBERED_LABEL_COUNT = 0;
 
 static ValueType LAST_TYPE = VT_NULL;
+static bool HAD_EXPR = false;
 
 // Shortcuts to prevent having to provide asm as argument every call
 void Instr(char* instr_name, char* arg0, char* arg1, char* arg2) {
@@ -50,6 +53,32 @@ char* int_to_str(const int i) {
     char* buf = MEMmalloc(MAX_STR_LEN);
     snprintf(buf, MAX_STR_LEN, "%i", i);
     return buf;
+}
+
+char* vt_to_str(const ValueType vt) {
+#ifdef DEBUGGING
+    if (vt == VT_NULL) {
+        // Should never occur
+        ERROR("Unexpected valuetype NULL %i", vt);
+    }
+#endif // DEBUGGING
+    return VT_TO_STR[vt];
+}
+
+char** generate_vt_strs(const ValueType* vts, const size_t len) {
+    char** strs = MEMmalloc(len * sizeof(char*));
+    for (size_t i = 0; i < len; i++) {
+        strs[i] = vt_to_str(vts[i]);
+    }
+    return strs;
+}
+
+static FunExportEntry find_fun_export(char* name) {
+    const FunExportEntry res = ASMfindFunExport(&ASM, name);
+#ifdef DEBUGGING
+    ASSERT_MSG((res.get != 0), "Result of retrieving known imported function yielded no results");
+#endif // DEBUGGING
+    return res;
 }
 
 /**
@@ -73,8 +102,8 @@ char* safe_concat_str(char* s1, char* s2) {
  * @return unique name
  */
 char* generate_unique_fun_name(const Symbol* s) {
-    // Don't generate name for global function
-    if (s->parent_scope->parent_fun == NULL) return s->name;
+    // Don't generate name for exported function
+    if (s->exported) return s->name;
 
     char* name = STRcpy(s->name);
     while (s->parent_scope->parent_fun != NULL) {
@@ -92,7 +121,7 @@ char* generate_unique_fun_name(const Symbol* s) {
  * @return unique name
  */
 char* generate_label_name(char* name) {
-    char* res = safe_concat_str(STRcpy("_"), int_to_str((int) NUMBERED_LABEL_COUNT));
+    char* res = safe_concat_str(STRcpy("_lab"), int_to_str((int) NUMBERED_LABEL_COUNT++));
     res = safe_concat_str(res, STRcpy("_"));
     return safe_concat_str(res, name);
 }
@@ -255,24 +284,30 @@ node_st *BCreturn(node_st *node)
  */
 node_st *BCfuncall(node_st *node)
 {
-    // TODO: Find out difference between isr and isrl
+    // TODO: Correctly handle calls to external functions
 
-    const Symbol* s = ScopeTreeFind(CURRENT_SCOPE, FUNCALL_NAME(node));
+    char* name = FUNCALL_NAME(node);
+    const Symbol* s = ScopeTreeFind(CURRENT_SCOPE, name);
 #ifdef DEBUGGING
-    ASSERT_MSG((s != NULL), "BYTECODE: Could not find symbol named %s", FUNCALL_NAME(node));
+    ASSERT_MSG((s != NULL), "BYTECODE: Could not find symbol named %s", name);
 #endif // DEBUGGING
 
-    const size_t current_level = CURRENT_SCOPE->nesting_level;
+    const size_t current_level = CURRENT_SCOPE->parent_fun->parent_scope->nesting_level;
     const size_t fun_level = s->parent_scope->nesting_level;
     const size_t fun_offset = s->offset;
 
     if (fun_level == 0) {
+        // Global function
         Instr("isrg", NULL, NULL, NULL);
+    } else if (fun_level == current_level + 1) {
+        // Function defined inside current scope
+        Instr("isrl", NULL, NULL, NULL);
     } else if (current_level == fun_level) {
+        // "Sister function", both defined in the same scope
         Instr("isr", NULL, NULL, NULL);
     } else {
 #ifdef DEBUGGING
-        ASSERT_MSG((current_level > fun_level), "Calling function from higher scope %lu compared to own scope %lu",
+        ASSERT_MSG((current_level > fun_level + 1), "Calling function from scope depth %lu unreachable by own scope depth %lu",
             fun_level, current_level);
 #endif // DEBUGGING
         char* delta_level = int_to_str((int) (current_level - fun_level));
@@ -283,15 +318,17 @@ node_st *BCfuncall(node_st *node)
     TRAVexprs(node);
 
     if (s->imported) {
-        char* offset_str = int_to_str((int) s->offset);
+        const size_t offset = find_fun_export(name).offset;
+        char* offset_str = int_to_str((int) offset);
         Instr("jsre", offset_str, NULL, NULL);
         MEMfree(offset_str);
     } else {
-        // TODO: Put function in list and refer to offset for arg1
         char* param_count_str = int_to_str((int) s->as.fun.param_count);
         Instr("jsr", int_to_str((int) s->as.fun.param_count), NULL, NULL);
         MEMfree(param_count_str);
     }
+
+    HAD_EXPR = true;
 
     /**
      * For each argument:
@@ -349,18 +386,32 @@ node_st *BCfundef(node_st *node)
 {
     char* name = FUNDEF_NAME(node);
     const Symbol* fun_symbol = ScopeTreeFind(CURRENT_SCOPE, name);
+    const FunData* fun_data = &fun_symbol->as.fun;
 
-    // Switch scope
-    SymbolTable* prev_scope = CURRENT_SCOPE;
-    CURRENT_SCOPE = fun_symbol->as.fun.scope;
+    // Save function to export list if export
+    if (fun_symbol->exported) {
+        ASMemitFunExport(
+            &ASM,
+            name,
+            vt_to_str(fun_symbol->vtype),
+            fun_data->param_count,
+            generate_vt_strs(fun_data->param_types, fun_data->param_count));
+    }
 
-    TRAVchildren(node);
+    if (!fun_symbol->imported) {
+        // Switch scope
+        SymbolTable* prev_scope = CURRENT_SCOPE;
+        CURRENT_SCOPE = fun_symbol->as.fun.scope;
 
-    // Revert scope
-    CURRENT_SCOPE = prev_scope;
+        TRAVchildren(node);
+
+        // Revert scope
+        CURRENT_SCOPE = prev_scope;
+    }
+
 
     /**
-    * Switch scopes
+    * Switch scopes if not imported
     */
     return node;
 }
@@ -374,9 +425,12 @@ node_st *BCfunbody(node_st *node)
 
     Label(generate_unique_fun_name(CURRENT_SCOPE->parent_fun), true);
 
-    char* offset_str = int_to_str((int) CURRENT_SCOPE->offset_counter);
-    Instr("esr", offset_str, NULL, NULL);
-    MEMfree(offset_str);
+    // Only write "esr" if at least one variable will be initialised
+    if (CURRENT_SCOPE->offset_counter > 0) {
+        char* offset_str = int_to_str((int) CURRENT_SCOPE->offset_counter);
+        Instr("esr", offset_str, NULL, NULL);
+        MEMfree(offset_str);
+    }
 
     TRAVdecls(node);
     TRAVstmts(node);
@@ -398,7 +452,7 @@ node_st *BCfunbody(node_st *node)
 node_st *BCifelse(node_st *node)
 {
     char* else_label_name = generate_label_name(STRcpy("else"));
-    char* endif_label_name = generate_label_name(STRcpy("endif"));
+    char* endif_label_name = generate_label_name(STRcpy("end"));
 
     TRAVcond(node);
 
@@ -410,6 +464,8 @@ node_st *BCifelse(node_st *node)
     Label(else_label_name, false);
 
     TRAVelse_block(node);
+
+    Label(endif_label_name, false);
 
     MEMfree(else_label_name);
     MEMfree(endif_label_name);
@@ -570,12 +626,48 @@ node_st *BCparam(node_st *node)
  */
 node_st *BCvardecl(node_st *node)
 {
+    HAD_EXPR = false;
     TRAVchildren(node);
+
+    if (HAD_EXPR) {
+        char* name = VARDECL_NAME(node);
+        const Symbol* s = STlookup(CURRENT_SCOPE, name);
+#ifdef DEBUGGING
+        ASSERT_MSG((s != NULL), "BYTECODE: Could not find symbol named %s", name);
+#endif // DEBUGGING
+
+        size_t current_level = CURRENT_SCOPE->nesting_level;
+        size_t var_level = s->parent_scope->nesting_level;
+        size_t var_offset = s->offset;
+#ifdef DEBUGGING
+        ASSERT_MSG((current_level == var_level),
+            "BYTECODE: Symbol declaration %s, only found in different scope",
+            name);
+#endif // DEBUGGING
+
+        char* instr = NULL;
+        switch (s->vtype) {
+            case VT_NUM: instr = STRcpy("i"); LAST_TYPE = VT_NUM; break;
+            case VT_FLOAT: instr = STRcpy("f"); LAST_TYPE = VT_FLOAT; break;
+            case VT_BOOL: instr = STRcpy("b"); LAST_TYPE = VT_BOOL; break;
+            // TODO: ARRAYS
+            default:  // Should not occur
+#ifdef DEBUGGING
+                ERROR("Incompatible Vardecl node with valuetype of %i", s->vtype);
+#endif // DEBUGGING
+        }
+
+        instr = safe_concat_str(instr, STRcpy("store"));
+        char* var_offset_str = int_to_str((int) var_offset);
+        Instr(instr, var_offset_str, NULL, NULL);
+        MEMfree(instr);
+        MEMfree(var_offset_str);
+    }
 
     /**
      * Match whether it has an expression:
      * --- No: Probably return since it's only here for the compiler to know the type
-     * --- Yes: Treat as an assign; push value to stack
+     * --- Yes: Treat as an assign; store value to variable
      * !!! Needs array handling
      */
     return node;
@@ -786,7 +878,6 @@ node_st *BCvarlet(node_st *node)
 #ifdef DEBUGGING
             ERROR("Incompatible Varlet node with valuetype of %i", s->vtype);
 #endif // DEBUGGING
-            break;
     }
 
     if (var_level == 0) {
@@ -908,6 +999,8 @@ node_st *BCvar(node_st *node)
 
     MEMfree(instr);
 
+    HAD_EXPR = true;
+
     /**
      * Find which scope variable is from
      * Match:
@@ -940,16 +1033,28 @@ node_st *BCnum(node_st *node)
         default: ;  // Don't remove this semicolon, it's here because a statement is expected
                     // and the declaration after is not a statement so the semicolon serves
                     // as an empty statement :)
-            char* v_str = int_to_str(v);
-            char* const_count_str = int_to_str((int) CONST_COUNT++);
-            ASMemitConst(&ASM, "int", v_str);
+            char* val_str = int_to_str(v);
+
+            // Refer to existing constant if possible
+            ConstEntry res = ASMfindConstant(&ASM, val_str);
+
+            char* const_count_str;
+            if (res.get != NULL) {
+                const_count_str = int_to_str((int) res.offset);
+            } else {
+                ASMemitConst(&ASM, "int", val_str);
+                const_count_str = int_to_str((int) CONST_COUNT++);
+            }
+
             Instr("iloadc", const_count_str, NULL, NULL);
-            MEMfree(v_str);
+
+            MEMfree(val_str);
             MEMfree(const_count_str);
             break;
     }
 
     LAST_TYPE = VT_NUM;
+    HAD_EXPR = true;
 
     return node;
 }
@@ -970,13 +1075,27 @@ node_st *BCfloat(node_st *node)
     if (v == 0.0) Instr("floadc_0", NULL, NULL, NULL);
     else if (v == 1.0) Instr("floadc_1", NULL, NULL, NULL);
     else {
-        ASMemitConst(&ASM, "float", float_to_str(v));
-        char* const_count_str = int_to_str((int) CONST_COUNT++);
+        char* val_str = float_to_str(v);
+
+        // Refer to existing constant if possible
+        ConstEntry res = ASMfindConstant(&ASM, val_str);
+
+        char* const_count_str;
+        if (res.get != NULL) {
+           const_count_str = int_to_str((int) res.offset);
+        } else {
+            ASMemitConst(&ASM, "float", val_str);
+            const_count_str = int_to_str((int) CONST_COUNT++);
+        }
+
         Instr("floadc", const_count_str, NULL, NULL);
+
+        MEMfree(val_str);
         MEMfree(const_count_str);
     }
 
     LAST_TYPE = VT_FLOAT;
+    HAD_EXPR = true;
 
     return node;
 }
@@ -1000,6 +1119,7 @@ node_st *BCbool(node_st *node)
     }
 
     LAST_TYPE = VT_BOOL;
+    HAD_EXPR = true;
 
     return node;
 }
