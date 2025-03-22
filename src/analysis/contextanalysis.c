@@ -748,6 +748,12 @@ node_st *CTAbinop(node_st *node)
     // Numbers are compatible
     if (left_is_arith && right_is_arith) {
         // If either argument is float, int is implicitly cast otherwise num
+        if (left_type == VT_NUM && right_type == VT_FLOAT) {
+            BINOP_LEFT(node) = ASTcast(BINOP_LEFT(node), CT_float);
+        } else if (left_type == VT_FLOAT && right_type == VT_NUM) {
+            BINOP_RIGHT(node) = ASTcast(BINOP_RIGHT(node), CT_float);
+        }
+
         last_type = left_type == VT_FLOAT || right_type == VT_FLOAT ? VT_FLOAT : VT_NUM;
     }
 
