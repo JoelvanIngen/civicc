@@ -267,7 +267,7 @@ forstmt: FOR BRACKET_L INTTYPE ID[var] LET expr[init] COMMA expr[stop] COMMA exp
              FOR_BLOCK($$) = $block;
              FOR_VAR($$) = $var;
            }
-         | FOR BRACKET_L ID[var] LET expr[init] COMMA expr[stop] BRACKET_R BRACE_L stmts[block] BRACE_R
+         | FOR BRACKET_L INTTYPE ID[var] LET expr[init] COMMA expr[stop] BRACKET_R BRACE_L stmts[block] BRACE_R
            {
              $$ = ASTfor($init, $stop);
              FOR_BLOCK($$) = $block;
