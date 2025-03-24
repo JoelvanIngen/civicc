@@ -18,8 +18,6 @@
 #include "symbol/scopetree.h"
 #include "symbol/table.h"
 
-#define MAX_STR_LEN 100
-
 static char* VT_TO_STR[] = {"int", "float", "bool", "void", "num[]", "float[]", "bool[]"};
 
 static FILE* ASM_FILE;
@@ -79,20 +77,6 @@ static FunExportEntry find_fun_export(char* name) {
     ASSERT_MSG((res.get != 0), "Result of retrieving known imported function yielded no results");
 #endif // DEBUGGING
     return res;
-}
-
-/**
- * Concatenates two strings and frees them
- * @param s1 first string
- * @param s2 second string
- * @return concatenated strings
- */
-char* safe_concat_str(char* s1, char* s2) {
-    char* buf = MEMmalloc(MAX_STR_LEN);
-    snprintf(buf, MAX_STR_LEN, "%s%s", s1, s2);
-    MEMfree(s1);
-    MEMfree(s2);
-    return buf;
 }
 
 /**
@@ -163,6 +147,9 @@ static void fini() {
     }
     write_assembly(ASM_FILE, &ASM);
     fclose(ASM_FILE);
+
+    // Free memory
+    STfree(&GB_GLOBAL_SCOPE);
 }
 
 /**
