@@ -52,6 +52,9 @@ static IdList* IDL = NULL;
 // Keeps track of whether we had an error during analysis
 static bool HAD_ERROR = false;
 
+// Name used as for-loop variable
+static char* FOR_LOOP_NAME = NULL;
+
 #define IS_ARITH_TYPE(vt) (vt == VT_NUM || vt == VT_FLOAT)
 #define IS_ARRAY(vt) (vt == VT_NUMARRAY || vt == VT_FLOATARRAY || vt == VT_BOOLARRAY)
 
@@ -491,23 +494,19 @@ node_st *CTAdowhile(node_st *node)
  */
 node_st *CTAfor(node_st *node)
 {
-    // TODO: Rework
-    // -- Either keep new scope and work that into symbol and scopetree logic
-    // -- Or prefix the variable with an underscore but find a way to make that work in the bytecode
-    // For now, I'll keep it in the same scope - but we need to fix that since vars will collide
-
-    // // Create new scope to ensure proper handling of loop variable
-    // STSpush(STS, NULL, VT_VOID);
+    // Prepend all instances with an underscore to prevent name collision
 
     char* name = FOR_VAR(node);
+
+    FOR_LOOP_NAME = STRcpy(name);
 
     Symbol* s = SBfromVar(name, VT_NUM, false);
     STinsert(CURRENT_SCOPE, name, s);
 
     TRAVchildren(node);
 
-    // // Discard scope
-    // STSpop(STS);
+    free(FOR_LOOP_NAME);
+    FOR_LOOP_NAME = NULL;
 
     return node;
 }
@@ -812,6 +811,11 @@ node_st *CTAvarlet(node_st *node)
 
     char* name = VARLET_NAME(node);
 
+    // Rename if used as for loop variable
+    if (FOR_LOOP_NAME == name) {
+        VARLET_NAME(node) = safe_concat_str(STRcpy("_"), name);
+    }
+
     // Look up variable
     const Symbol* s = STlookup(CURRENT_SCOPE, name);
 
@@ -854,6 +858,11 @@ node_st *CTAvar(node_st *node)
     // Note: Requires array support
 
     char* name = VAR_NAME(node);
+
+    // Rename if used as for loop variable
+    if (FOR_LOOP_NAME == name) {
+        VAR_NAME(node) = safe_concat_str(STRcpy("_"), name);
+    }
 
     // Look up variable
     const Symbol* s = STlookup(CURRENT_SCOPE, name);
