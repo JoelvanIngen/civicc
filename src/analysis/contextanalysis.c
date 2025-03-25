@@ -7,8 +7,6 @@
  *
  */
 
-// TODO: Unify all additions to scope to single helper function
-// - to reduce clutter and duplicate code
 // TODO: Find method to count amount of array init entries,
 // and push scope's offset counter by that amount
 
@@ -32,7 +30,7 @@ typedef enum {
 } PassType;
 
 static PassType PASS;
-static ValueType last_type;
+static ValueType LAST_TYPE;
 
 // Current scope in the tree
 static SymbolTable* CURRENT_SCOPE;
@@ -82,14 +80,15 @@ ValueType valuetype_from_nt(const enum Type ct_type, const bool is_array) {
         case CT_bool: return is_array ? VT_BOOLARRAY : VT_BOOL;
         case CT_void:
             if (is_array) {
-                // Doesn't exist - TODO: find out if actually doesn't exist
-                printf("Type error: cannot have a void array\n");
-                exit(1);
+                // Doesn't exist
+                USER_ERROR("Type error: tried to initialise void array");
+                HAD_ERROR = true;
             }
         return VT_VOID;
         default:
-            printf("Type error: unexpected ct_type %i\n", ct_type);
-        exit(1);
+#ifdef DEBUGGING
+            ERROR("Unexpected CT_TYPE %i", ct_type);
+#endif // DEBUGGING
     }
 }
 
@@ -190,18 +189,16 @@ node_st *CTAprogram(node_st *node)
     DLS = DLSnew();
 
     /* First pass; we only look at function definitions, so we can correctly
-     * handle usages of functions that have not been defined yet
-     */
+     * handle usages of functions that have not been defined yet */
     PASS = DECLARATION_PASS;
     TRAVchildren(node);
 
     /* Second pass; we perform full analysis of the body now that we know
-     * all definitions
-     */
+     * all definitions */
     PASS = ANALYSIS_PASS;
     TRAVchildren(node);
 
-    // If we had an error, exit
+    // Exit here if an analysis error occurred
     exit_if_error();
 
     return node;
@@ -230,7 +227,7 @@ node_st *CTAexprs(node_st *node)
 
     if (SAVING_IDXS) {
         // TODO: Find out which values are allowed (can floats be used for index, does bool cast to idx 0 or 1)?
-        if (last_type != VT_NUM) {
+        if (LAST_TYPE != VT_NUM) {
             HAD_ERROR = true;
             USER_ERROR("Can only index arrays with integers");
         }
@@ -290,7 +287,7 @@ node_st *CTAreturn(node_st *node)
 
     // Find type of return expression
     const node_st* expr = RETURN_EXPR(node);
-    const ValueType ret_type = expr == NULL ? VT_VOID : last_type;
+    const ValueType ret_type = expr == NULL ? VT_VOID : LAST_TYPE;
 
     // Check validity of return expression
     const ValueType parent_fun_type = CURRENT_SCOPE->parent_fun->vtype;
@@ -313,14 +310,14 @@ node_st *CTAfuncall(node_st *node)
     if (!s) {
         HAD_ERROR = true;
         USER_ERROR("Function name %s does not exist in scope.", name);
-        last_type = VT_VOID;
+        LAST_TYPE = VT_VOID;
         return node;
     }
 
     if (s->stype != ST_FUNCTION) {
         HAD_ERROR = true;
         USER_ERROR("Name %s is not defined as a function.", name);
-        last_type = VT_VOID;
+        LAST_TYPE = VT_VOID;
         return node;
     }
 
@@ -374,7 +371,7 @@ node_st *CTAfuncall(node_st *node)
     ALSpop(ALS);
 
     // Last type is function return type
-    last_type = s->vtype;
+    LAST_TYPE = s->vtype;
     return node;
 }
 
@@ -384,12 +381,12 @@ node_st *CTAfuncall(node_st *node)
 node_st *CTAcast(node_st *node)
 {
     TRAVchildren(node);
-    if (!(last_type == VT_NUM || last_type == VT_FLOAT || last_type == VT_BOOL)) {
+    if (!(LAST_TYPE == VT_NUM || LAST_TYPE == VT_FLOAT || LAST_TYPE == VT_BOOL)) {
         USER_ERROR("Invalid cast source, can only cast from Num, Float or Bool but got %s",
-            vt_to_string(last_type));
+            vt_to_string(LAST_TYPE));
     }
 
-    last_type = valuetype_from_nt(CAST_TYPE(node), false);
+    LAST_TYPE = valuetype_from_nt(CAST_TYPE(node), false);
     return node;
 }
 
@@ -584,10 +581,10 @@ node_st *CTAglobdef(node_st *node)
 
     // TODO: Check if types implicitly cast
     // We can use last_type because globdef always has an init child
-    if (valuetype_from_nt(GLOBDEF_TYPE(node), is_array) != last_type) {
+    if (valuetype_from_nt(GLOBDEF_TYPE(node), is_array) != LAST_TYPE) {
         USER_ERROR("Variable of type %s was initialised with expression of type %s",
             vt_to_string(valuetype_from_nt(GLOBDEF_TYPE(node), is_array)),
-            vt_to_string(last_type));
+            vt_to_string(LAST_TYPE));
     }
 
     // TODO: Allow scalar to init array
@@ -670,17 +667,17 @@ node_st *CTAvardecl(node_st *node)
     // Clean up
     DLSpop(DLS);
 
-    last_type = VT_NULL;
+    LAST_TYPE = VT_NULL;
     TRAVinit(node);
 
     // Find out if an init existed
-    if (last_type != VT_NULL) {
+    if (LAST_TYPE != VT_NULL) {
         // Compare types
         // TODO: Allow scalar to init array
         // TODO: Find out if types implicitly cast
-        if (s->vtype != last_type) {
+        if (s->vtype != LAST_TYPE) {
             USER_ERROR("Tried to initialise variable %s with %s",
-                vt_to_string(s->vtype), vt_to_string(last_type));
+                vt_to_string(s->vtype), vt_to_string(LAST_TYPE));
         }
     }
 
@@ -705,11 +702,11 @@ node_st *CTAassign(node_st *node)
     // Note: Might require array support?
 
     TRAVlet(node);
-    const ValueType let_type = last_type;
+    const ValueType let_type = LAST_TYPE;
     const bool let_is_arith = IS_ARITH_TYPE(let_type);
 
     TRAVchildren(node);
-    const ValueType expr_type = last_type;
+    const ValueType expr_type = LAST_TYPE;
     const bool expr_is_arith = IS_ARITH_TYPE(expr_type);
 
     // Numbers are compatible
@@ -720,12 +717,12 @@ node_st *CTAassign(node_st *node)
         } else if (let_type == VT_FLOAT && expr_type == VT_NUM) {
             ASSIGN_EXPR(node) = ASTcast(ASSIGN_EXPR(node), CT_float);
         }
-        last_type = let_type == VT_FLOAT || expr_type == VT_FLOAT ? VT_FLOAT : VT_NUM;
+        LAST_TYPE = let_type == VT_FLOAT || expr_type == VT_FLOAT ? VT_FLOAT : VT_NUM;
     }
 
     // Booleans are compatible
     else if (let_type == VT_BOOL && expr_type == VT_BOOL) {
-        last_type = VT_BOOL;
+        LAST_TYPE = VT_BOOL;
     }
 
     else {
@@ -742,11 +739,11 @@ node_st *CTAassign(node_st *node)
 node_st *CTAbinop(node_st *node)
 {
     TRAVleft(node);
-    const ValueType left_type = last_type;
+    const ValueType left_type = LAST_TYPE;
     const bool left_is_arith = IS_ARITH_TYPE(left_type);
 
     TRAVright(node);
-    const ValueType right_type = last_type;
+    const ValueType right_type = LAST_TYPE;
     const bool right_is_arith = IS_ARITH_TYPE(right_type);
 
     // Numbers are compatible
@@ -758,12 +755,12 @@ node_st *CTAbinop(node_st *node)
             BINOP_RIGHT(node) = ASTcast(BINOP_RIGHT(node), CT_float);
         }
 
-        last_type = left_type == VT_FLOAT || right_type == VT_FLOAT ? VT_FLOAT : VT_NUM;
+        LAST_TYPE = left_type == VT_FLOAT || right_type == VT_FLOAT ? VT_FLOAT : VT_NUM;
     }
 
     // Booleans are compatible
     else if (left_type == VT_BOOL && right_type == VT_BOOL) {
-        last_type = VT_BOOL;
+        LAST_TYPE = VT_BOOL;
     }
 
     else {
@@ -785,12 +782,12 @@ node_st *CTAmonop(node_st *node)
     switch (MONOP_OP(node)) {
         // TODO: Find out if negated bool switches values (probably not)
         case MO_neg:
-            if (!(last_type == VT_NUM || last_type == VT_FLOAT)) {
-                USER_ERROR("Expected operand type Int or Float, got %s instead", vt_to_string(last_type));
+            if (!(LAST_TYPE == VT_NUM || LAST_TYPE == VT_FLOAT)) {
+                USER_ERROR("Expected operand type Int or Float, got %s instead", vt_to_string(LAST_TYPE));
             }
             break;
-        case MO_not: if (last_type != VT_BOOL) {
-                USER_ERROR("Expected operand type Bool, got %s instead", vt_to_string(last_type));
+        case MO_not: if (LAST_TYPE != VT_BOOL) {
+                USER_ERROR("Expected operand type Bool, got %s instead", vt_to_string(LAST_TYPE));
             }
             break;
         default: /* Should never occur */
@@ -839,9 +836,9 @@ node_st *CTAvarlet(node_st *node)
             USER_ERROR("Expected array dimension count is %lu but got %lu", s->as.array.dim_count, dml->size);
         }
 
-        last_type = demote_array_type(s->vtype);
+        LAST_TYPE = demote_array_type(s->vtype);
     } else {
-        last_type = s->vtype;
+        LAST_TYPE = s->vtype;
     }
 
     // Clean up
@@ -887,9 +884,9 @@ node_st *CTAvar(node_st *node)
             USER_ERROR("Expected array dimension count is %lu but got %lu", s->as.array.dim_count, dml->size);
         }
 
-        last_type = demote_array_type(s->vtype);
+        LAST_TYPE = demote_array_type(s->vtype);
     } else {
-        last_type = s->vtype;
+        LAST_TYPE = s->vtype;
     }
 
     // Clean up
@@ -904,7 +901,7 @@ node_st *CTAvar(node_st *node)
 node_st *CTAnum(node_st *node)
 {
     TRAVchildren(node);
-    last_type = VT_NUM;
+    LAST_TYPE = VT_NUM;
     return node;
 }
 
@@ -914,7 +911,7 @@ node_st *CTAnum(node_st *node)
 node_st *CTAfloat(node_st *node)
 {
     TRAVchildren(node);
-    last_type = VT_FLOAT;
+    LAST_TYPE = VT_FLOAT;
     return node;
 }
 
@@ -924,7 +921,7 @@ node_st *CTAfloat(node_st *node)
 node_st *CTAbool(node_st *node)
 {
     TRAVchildren(node);
-    last_type = VT_BOOL;
+    LAST_TYPE = VT_BOOL;
     return node;
 }
 
