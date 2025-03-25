@@ -53,6 +53,7 @@ Symbol* SBfromArray(char* name, const ValueType vt, const bool imported) {
     return s;
 }
 
+/**
  * Creates a new symbol for a variable
  * @param name name of the variable
  * @param vt type of data the variable holds
