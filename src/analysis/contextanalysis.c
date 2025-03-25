@@ -523,7 +523,7 @@ node_st *CTAglobdecl(node_st *node)
     IDL = IDLnew();
     TRAVdims(node);
 
-    const bool is_array = IDL->size > 0;
+    const bool is_array = IDL->ptr > 0;
 
     // Add self to vartable of current scope
     Symbol* s;
@@ -531,7 +531,7 @@ node_st *CTAglobdecl(node_st *node)
 
     if (is_array) {
         s = SBfromArray(name, type, true);
-        s->as.array.dim_count = IDL->size;
+        s->as.array.dim_count = IDL->ptr;
     } else {
         s = SBfromVar(name, type, true);
     }
@@ -607,7 +607,8 @@ node_st *CTAparam(node_st *node)
     IDL = IDLnew();
     TRAVdims(node);
 
-    const bool is_array = IDL->size > 0;
+    // Is pointer if more than zero
+    const bool is_array = IDL->ptr > 0;
 
     // Add self to vartable of current scope
     const ValueType param_type = valuetype_from_nt(PARAM_TYPE(node), is_array);
@@ -620,13 +621,12 @@ node_st *CTAparam(node_st *node)
 
     if (is_array) {
         // Add array properties
-        s->as.array.dim_count = IDL->size;
+        s->as.array.dim_count = IDL->ptr;
     }
 
     // Add parameter to the function it belongs to
-    char* fun_name = CURRENT_SCOPE->parent_fun->name;
-    Symbol* parent_fun = STlookup(CURRENT_SCOPE, fun_name);
-    SBaddParam(parent_fun, param_type, IDL->size);
+    Symbol* parent_fun = CURRENT_SCOPE->parent_fun;
+    SBaddParam(parent_fun, param_type, IDL->ptr);
 
     IDLfree(&IDL);
 

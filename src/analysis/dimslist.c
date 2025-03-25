@@ -12,6 +12,11 @@ DimsList* DMLnew() {
 
 void DMLfree(DimsList** dml_ptr) {
     DimsList* dml = *dml_ptr;
+
+    for (size_t i = 0; i < dml->size; i++) {
+        MEMfree(dml->dims[i]);
+    }
+
     MEMfree(dml->dims);
     MEMfree(dml);
     *dml_ptr = NULL;

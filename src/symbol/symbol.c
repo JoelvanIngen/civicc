@@ -132,6 +132,7 @@ void SBaddDim(Symbol* s, size_t dim) {
 */
 void SBaddParam(Symbol* s, ValueType const vt, size_t dim_count) {
 #ifdef DEBUGGING
+    ASSERT_MSG((s != NULL), "Got NULL value for symbol to add parameters to");
     ASSERT_MSG((s->stype == ST_FUNCTION), "Tried to add parameter for non-function symbol");
 #endif
     if (s->as.fun.param_count + 1 >= s->as.fun.capacity) {

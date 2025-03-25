@@ -10,28 +10,29 @@ typedef ArgListStack ALS;
 typedef ArgList AL;
 
 static void checkResizeAL(AL* al) {
-    if (al->ptr + 1 >= al->size) {
-        al->size = al->size * 2;
-        al->args = MEMrealloc(al->args, al->size * sizeof(Argument));
+    if (al->ptr + 1 >= al->capacity) {
+        al->capacity = al->capacity * 2;
+        al->args = MEMrealloc(al->args, al->capacity * sizeof(Argument));
     }
 }
 
 static void checkResizeALS(ALS* als) {
-    if (als->ptr + 1 >= als->size) {
-        als->size = als->size * 2;
-        als->fun_calls = MEMrealloc(als->fun_calls, als->size * sizeof(Argument));
+    if (als->ptr + 1 >= als->capacity) {
+        als->capacity = als->capacity * 2;
+        als->fun_calls = MEMrealloc(als->fun_calls, als->capacity * sizeof(Argument));
     }
 }
 
-static AL* ALinit(AL* al) {
+static AL* ALnew() {
+    AL* al = MEMmalloc(sizeof(ArgList));
     al->ptr = 0;
-    al->size = INITIAL_SIZE;
-    al->args = MEMmalloc(al->size * sizeof(Argument));
+    al->capacity = INITIAL_SIZE;
+    al->args = MEMmalloc(al->capacity * sizeof(Argument));
     return al;
 }
 
 static void ALfree(AL* al) {
-    for (size_t i = 0; i < al->size; i++) {
+    for (size_t i = 0; i < al->ptr; i++) {
         MEMfree(al->args[i].name);
     }
 
@@ -50,8 +51,8 @@ void ALadd(AL* al, char* name, const ValueType type) {
 ALS* ALSnew() {
     ALS* als = MEMmalloc(sizeof(ALS));
     als->ptr = 0;
-    als->size = INITIAL_SIZE;
-    als->fun_calls = MEMmalloc(als->size * sizeof(AL));
+    als->capacity = INITIAL_SIZE;
+    als->fun_calls = MEMmalloc(als->capacity * sizeof(AL));
     return als;
 }
 
@@ -70,7 +71,7 @@ void ALSfree(ALS** als) {
 /** Starts a new funcall */
 void ALSpush(ALS* als) {
     checkResizeALS(als);
-    ALinit(als->fun_calls[als->ptr]);
+    als->fun_calls[als->ptr] = ALnew();
     als->ptr++;
 }
 

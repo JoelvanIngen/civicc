@@ -14,13 +14,13 @@ typedef struct {
 typedef struct {
     Argument* args;
     size_t ptr;
-    size_t size;
+    size_t capacity;
 } ArgList;
 
 typedef struct {
     ArgList** fun_calls;
     size_t ptr;
-    size_t size;
+    size_t capacity;
 } ArgListStack;
 
 ArgList* PLnew();

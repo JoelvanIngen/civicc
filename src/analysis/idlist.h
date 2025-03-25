@@ -5,7 +5,7 @@
 #include "common.h"
 
 typedef struct {
-    size_t size;
+    size_t ptr;
     size_t capacity;
     char** ids;
 } IdList;

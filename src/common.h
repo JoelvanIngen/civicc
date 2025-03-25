@@ -22,7 +22,7 @@
 
 /* Error with debug information for developing civic */
 #define ERROR(fmt, ...) do { \
-    fprintf(stderr, "RUNTIME ERROR: "); \
+    fprintf(stderr, "DEBUG ERROR AT %s:%d: ", __FILE__, __LINE__); \
     fprintf(stderr, fmt, ##__VA_ARGS__); \
     fprintf(stderr, "\n"); \
     assert(false); \
