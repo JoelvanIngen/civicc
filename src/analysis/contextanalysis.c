@@ -768,6 +768,25 @@ node_st *CTAbinop(node_st *node)
             vt_to_string(left_type), vt_to_string(right_type));
     }
 
+    // Check individual operators with types
+    const enum BinOpType t = BINOP_OP(node);
+    if (left_is_arith) {
+        if (!(t == BO_add || t == BO_sub || t == BO_mul || t == BO_div || t == BO_mod ||
+              t == BO_eq || t == BO_ne || t == BO_lt || t == BO_le || t == BO_gt || t == BO_ge)) {
+            USER_ERROR("Invalid operands %s and %s for operator %i",
+                vt_to_string(left_type), vt_to_string(right_type), t);
+        }
+    } else if (left_type == VT_BOOL) {
+        if (!(t == BO_add || t == BO_sub || t == BO_eq || t == BO_ne || t == BO_and || t == BO_or)) {
+            USER_ERROR("Invalid operands %s and %s for operator %i",
+                vt_to_string(left_type), vt_to_string(right_type), t);
+        }
+    } else {
+#ifdef DEBUGGING
+        ERROR("Unexpected operand %s is not arith or bool", vt_to_string(left_type));
+#endif // DEBUGGING
+    }
+
     return node;
 }
 
