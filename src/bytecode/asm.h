@@ -18,6 +18,7 @@ typedef struct Instruction {
     char* instr;                // Instruction string
     char* arg0, * arg1, * arg2; // Optional arguments for instruction
     bool is_label;              // Ugly hack to allow labels in the stream, instr will be label name
+    bool is_fun;                // Function labels are prepended by a whitespace
     struct Instruction* next;   // We won't be changing any instructions once they're generated
                                 // so with a linked list we avoid size checks
 } Instruction;
@@ -29,12 +30,37 @@ typedef struct Constant {
 } Constant;
 
 typedef struct FunExport {
-    char* name;                 // Name of exported function
-    char* type;                 // Return type of function
+    char* name;                 // Name of exported function, also label name
+    char* ret_type;             // Return type of function
+    size_t arg_amount;
     char** args;                // Argument types
-    bool is_main;               // From example, it seems "main" should be appended if function is main?
     struct FunExport* next;
 } FunExport;
+
+typedef struct VarExport {
+    char* name;
+    size_t global_index;        // Index of var at global table
+    struct VarExport* next;
+} VarExport;
+
+typedef struct GlobVar {
+    char* type;
+    struct GlobVar* next;
+} GlobVar;
+
+typedef struct FunImport {
+    char* name;
+    char* ret_type;
+    size_t arg_amount;
+    char** args;
+    struct FunImport* next;
+} FunImport;
+
+typedef struct VarImport {
+    char* name;
+    char* type;
+    struct VarImport* next;
+} VarImport;
 
 typedef struct {
     Instruction* instrs;
@@ -43,10 +69,37 @@ typedef struct {
     Constant* last_const;
     FunExport* fun_exports;
     FunExport* last_fun_export;
+    VarExport* var_exports;
+    VarExport* last_var_export;
+    GlobVar* glob_vars;
+    GlobVar* last_glob_var;
+    FunImport* fun_imports;
+    FunImport* last_fun_import;
+    VarImport* var_imports;
+    VarImport* last_var_import;
 } Assembly;
+
+typedef struct ConstEntry {             // Used for finding and retrieving values already written to ASM
+    size_t offset;                      // Offset in final written ASM
+    Constant* get;                      // The result itself
+} ConstEntry;
+
+typedef struct FunExportEntry {
+    size_t offset;
+    FunExport* get;
+} FunExportEntry;
 
 void ASMinit(Assembly* assembly);
 void ASMfree(Assembly** assembly_ptr);
-void ASMemitInstr(Assembly* assembly, char* instr_name, char* arg0, char* arg1, char* arg2, bool is_label);
+
+void ASMemitInstr(Assembly* assembly, char* instr_name, char* arg0, char* arg1, char* arg2);
+void ASMemitLabel(Assembly* assembly, char* label, bool is_fun);
 void ASMemitConst(Assembly* assembly, char* type, char* val);
-void ASMemitFunExport(Assembly* assembly, char* name, char* type, char** args, bool is_main);
+void ASMemitFunExport(Assembly* assembly, char* name, char* ret_type, size_t arglen, char** args);
+void ASMemitVarExport(Assembly* assembly, char* name, size_t glob_index);
+void ASMemitGlobVar(Assembly* assembly, char* type);
+void ASMemitFunImport(Assembly* assembly, char* name, char* ret_type, size_t arg_amount, char** args);
+void ASMemitVarImport(Assembly* assembly, char* name, char* type);
+
+ConstEntry ASMfindConstant(const Assembly* assembly, const char* value);
+FunExportEntry ASMfindFunExport(const Assembly* assembly, const char* name);

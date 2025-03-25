@@ -10,6 +10,8 @@
 */
 SymbolTable* STnew(SymbolTable* parent_table, Symbol* parent_symbol) {
     SymbolTable* st = MEMmalloc(sizeof(SymbolTable));
+    st->offset_counter = 0;
+    st->nesting_level = parent_table == NULL ? 0 : parent_table->nesting_level + 1;
     st->parent_scope = parent_table;
     st->parent_fun = parent_symbol;
     st->table = HTnew_String(VARTABLE_SIZE);
@@ -29,11 +31,12 @@ void STfree(SymbolTable** st_ptr) {
     for (htable_iter_st *iter = HTiterate(st->table); iter;
             iter = HTiterateNext(iter)) {
 
-        void *key = HTiterKey(iter);
+        char* key = HTiterKey(iter);
+        Symbol* value = HTiterValue(iter);
+
         MEMfree(key);
         key = NULL;
-        void *value = HTiterValue(iter);
-        SBfree((Symbol**) &value);
+        SBfree(&value);
     }
 
     HTdelete(st->table);
@@ -50,11 +53,18 @@ void STfree(SymbolTable** st_ptr) {
  * Output: None
  * Side-effect: Added new identifier to table
 */
-void STinsert(const SymbolTable* st, char* name, Symbol* sym) {
+void STinsert(SymbolTable* st, char* name, Symbol* sym) {
     if (HTlookup(st->table, name) != NULL) {
         USER_ERROR("Symbol %s already exists, but is redefined", name);
         return;
     }
+
+#ifdef DEBUGGING
+    ASSERT_MSG((sym->parent_scope == NULL), "Trying to assign scope to symbol, but it was already assigned");
+#endif // DEBUGGING
+    sym->offset = st->offset_counter;
+    st->offset_counter++;
+    sym->parent_scope = st;
     HTinsert(st->table, STRcpy(name), sym);
 }
 

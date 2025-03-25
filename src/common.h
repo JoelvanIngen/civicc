@@ -16,6 +16,7 @@
 #define VARTABLE_STACK_SIZE 10
 #define VARTABLE_SIZE 100
 #define INITIAL_LIST_SIZE 5
+#define MAX_STR_LEN 100
 
 #define DEBUGGING true
 
@@ -39,3 +40,5 @@
 } while (false)
 
 #define ARRAY_RESIZE(arr, new_size) (arr = MEMrealloc(arr, (new_size) * sizeof(*(arr))))
+
+char* safe_concat_str(char* s1, char* s2);

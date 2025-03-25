@@ -5,66 +5,63 @@
 #include "common.h"
 #include "scopetree.h"
 
-
-/* Create new symbol struct to keep track of symbol information
- *
- * Output: pointer to allocated memory for struct
-*/
-static Symbol* SBnew() {
-    return MEMmalloc(sizeof(Symbol));
-}
-
-/* Create a symbol struct as function and initialize space for
- * function parameters
- *
- * name: name of function
- * vt: Value type enum value which defines the type
- *
- * Output: Pointer to symbol struct for a function
-*/
-Symbol* SBfromFun(char* name, const ValueType vt) {
-    Symbol* s = SBnew();
-    s->stype = ST_FUNCTION;
+/**
+ * Allocates memory for a new symbol and sets common attributes
+ * @param name identifier name of the symbol
+ * @param vt type of the value that the symbol holds or returns
+ * @param imported boolean that sets whether the identifier was imported from an external file
+ * @return pointer to new symbol struct
+ */
+static Symbol* SBnew(char* name, const ValueType vt, const bool imported) {
+    Symbol* s = MEMmalloc(sizeof(Symbol));
     s->vtype = vt;
     s->name = STRcpy(name);
+    s->imported = imported;
+    s->parent_scope = NULL;
+    return s;
+}
+
+/**
+ * Creates a new symbol for a function identifier
+ * @param name name of the function
+ * @param vt return type of function
+ * @param imported boolean that sets whether the function was imported from an external file
+ * @return pointer to new symbol struct
+ */
+Symbol* SBfromFun(char* name, const ValueType vt, const bool imported) {
+    Symbol* s = SBnew(name, vt, imported);
+    s->stype = ST_FUNCTION;
     s->as.fun.param_count = 0;
     s->as.fun.param_types = MEMmalloc(INITIAL_LIST_SIZE * sizeof(ValueType));
     s->as.fun.param_dim_counts = MEMmalloc(INITIAL_LIST_SIZE * sizeof(size_t));
     return s;
 }
 
-/* Create a symbol struct as array and initialize space for
- * array values
- *
- * name: name of array variable
- * vt: type of values within array
- *
- * Output: Pointer to symbol struct for an array
-*/
-Symbol* SBfromArray(char* name, const ValueType vt) {
-    Symbol* s = SBnew();
+/**
+ * Creates a new symbol for an array variable
+ * @param name name of the array variable
+ * @param vt type of data the array holds
+ * @param imported boolean that sets whether the array was imported from an external file
+ * @return pointer to new symbol struct
+ */
+Symbol* SBfromArray(char* name, const ValueType vt, const bool imported) {
+    Symbol* s = SBnew(name, vt, imported);
     s->stype = ST_ARRAYVAR;
-    s->vtype = vt;
-    s->name = STRcpy(name);
     s->as.array.dim_count = 0;
     s->as.array.capacity = INITIAL_LIST_SIZE;
     s->as.array.dims = MEMmalloc(s->as.array.capacity * sizeof(size_t));
     return s;
 }
 
-/* Create a symbol struct as variable and no space is initialized
- * but for the symbol symbol itself
- *
- * name: name of array variable
- * vt: type of values within array
- *
- * Output: Pointer to symbol struct for an array
-*/
-Symbol* SBfromVar(char* name, const ValueType vt) {
-    Symbol* s = SBnew();
+ * Creates a new symbol for a variable
+ * @param name name of the variable
+ * @param vt type of data the variable holds
+ * @param imported boolean that sets whether the variable was imported from an external file
+ * @return pointer to new symbol struct
+ */
+Symbol* SBfromVar(char* name, const ValueType vt, const bool imported) {
+    Symbol* s = SBnew(name, vt, imported);
     s->stype = ST_VALUEVAR;
-    s->vtype = vt;
-    s->name = STRcpy(name);
     return s;
 }
 

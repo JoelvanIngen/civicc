@@ -42,15 +42,18 @@ typedef struct {
     ValueType vtype;
     char* name;
     size_t offset;                      // Offset within scope
+    bool imported;                      // True for imported identifiers
+    bool exported;                      // True for exported identifiers
+    struct SymbolTable* parent_scope;   // Scope this symbol is assigned to
     union {
         ArrayData array;
         FunData fun;
     } as;
 } Symbol;
 
-Symbol* SBfromFun(char* name, ValueType vt);
-Symbol* SBfromArray(char* name, ValueType vt);
-Symbol* SBfromVar(char* name, ValueType vt);
+Symbol* SBfromFun(char* name, ValueType vt, bool imported);
+Symbol* SBfromArray(char* name, ValueType vt, bool imported);
+Symbol* SBfromVar(char* name, ValueType vt, bool imported);
 void SBfree(Symbol** s_ptr);
 void SBaddDim(Symbol* s, size_t dim);
 void SBaddParam(Symbol* s, ValueType vt, size_t dim_count);

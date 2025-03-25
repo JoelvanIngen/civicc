@@ -9,12 +9,15 @@
 
 // TODO: Unify all additions to scope to single helper function
 // - to reduce clutter and duplicate code
+// TODO: Find method to count amount of array init entries,
+// and push scope's offset counter by that amount
 
 #include "ccn/ccn.h"
 #include "ccngen/ast.h"
 #include "ccngen/trav.h"
 
 #include "common.h"
+#include "global/globals.h"
 #include "idlist.h"
 #include "argstack.h"
 #include "dimsliststack.h"
@@ -28,26 +31,29 @@ typedef enum {
     ANALYSIS_PASS,
 } PassType;
 
-PassType PASS;
-ValueType last_type;
+static PassType PASS;
+static ValueType last_type;
 
 // Current scope in the tree
-SymbolTable* CURRENT_SCOPE;
+static SymbolTable* CURRENT_SCOPE;
 
 // Stacking nested function calls
-ArgListStack* ALS;
+static ArgListStack* ALS;
 
 // Stacking nested array indexing
-DimsListStack* DLS;
+static DimsListStack* DLS;
 
 // Flag to determine if we are saving indexes to stack
-bool SAVING_IDXS = false;
+static bool SAVING_IDXS = false;
 
 // Listing parameter dimensions
-IdList* IDL = NULL;
+static IdList* IDL = NULL;
 
 // Keeps track of whether we had an error during analysis
-bool HAD_ERROR = false;
+static bool HAD_ERROR = false;
+
+// Name used as for-loop variable
+static char* FOR_LOOP_NAME = NULL;
 
 #define IS_ARITH_TYPE(vt) (vt == VT_NUM || vt == VT_FLOAT)
 #define IS_ARRAY(vt) (vt == VT_NUMARRAY || vt == VT_FLOATARRAY || vt == VT_BOOLARRAY)
@@ -175,6 +181,7 @@ node_st *CTAprogram(node_st *node)
 {
     // TODO: Free global scope after bytecode generation
     CURRENT_SCOPE = STnew(NULL, NULL);
+    GB_GLOBAL_SCOPE = CURRENT_SCOPE;
 
     // Initialise funcall argument stack
     ALS = ALSnew();
@@ -405,25 +412,34 @@ node_st *CTAfundef(node_st *node)
 
     if (PASS == DECLARATION_PASS) {
         /* First pass: only return information about self */
-        Symbol* s = SBfromFun(fun_name, ret_type);
-        s->as.fun.scope = STnew(CURRENT_SCOPE, s);
+        const bool is_extern = FUNDEF_IS_EXTERN(node);
+        Symbol* s = SBfromFun(fun_name, ret_type, is_extern);
+
+        if (!is_extern) {
+            s->as.fun.scope = STnew(CURRENT_SCOPE, s);
+        }
+
         STinsert(CURRENT_SCOPE, fun_name, s);
     } else {
         /* Second pass: explore information about own statements
          * Here we also detect if variables are wrongly typed */
 
-        // Switch to new scope
         const Symbol* s = STlookup(CURRENT_SCOPE, fun_name);
-        CURRENT_SCOPE = s->as.fun.scope;
 
-        // Add parameters to scope
-        TRAVparams(node);
+        // Only explore if not extern
+        if (!s->imported) {
+            // Switch to new scope
+            CURRENT_SCOPE = s->as.fun.scope;
 
-        // Explore function body
-        TRAVbody(node);
+            // Add parameters to scope
+            TRAVparams(node);
 
-        // Switch back to parent scope
-        CURRENT_SCOPE = CURRENT_SCOPE->parent_scope;
+            // Explore function body
+            TRAVbody(node);
+
+            // Switch back to parent scope
+            CURRENT_SCOPE = CURRENT_SCOPE->parent_scope;
+        }
     }
 
     return node;
@@ -478,23 +494,19 @@ node_st *CTAdowhile(node_st *node)
  */
 node_st *CTAfor(node_st *node)
 {
-    // TODO: Rework
-    // -- Either keep new scope and work that into symbol and scopetree logic
-    // -- Or prefix the variable with an underscore but find a way to make that work in the bytecode
-    // For now, I'll keep it in the same scope - but we need to fix that since vars will collide
-
-    // // Create new scope to ensure proper handling of loop variable
-    // STSpush(STS, NULL, VT_VOID);
+    // Prepend all instances with an underscore to prevent name collision
 
     char* name = FOR_VAR(node);
 
-    Symbol* s = SBfromVar(name, VT_NUM);
+    FOR_LOOP_NAME = STRcpy(name);
+
+    Symbol* s = SBfromVar(name, VT_NUM, false);
     STinsert(CURRENT_SCOPE, name, s);
 
     TRAVchildren(node);
 
-    // // Discard scope
-    // STSpop(STS);
+    free(FOR_LOOP_NAME);
+    FOR_LOOP_NAME = NULL;
 
     return node;
 }
@@ -521,10 +533,10 @@ node_st *CTAglobdecl(node_st *node)
     const ValueType type = valuetype_from_nt(GLOBDECL_TYPE(node), is_array);
 
     if (is_array) {
-        s = SBfromArray(name, type);
+        s = SBfromArray(name, type, true);
         s->as.array.dim_count = IDL->size;
     } else {
-        s = SBfromVar(name, type);
+        s = SBfromVar(name, type, true);
     }
 
     STinsert(CURRENT_SCOPE, name, s);
@@ -552,7 +564,7 @@ node_st *CTAglobdef(node_st *node)
     // Add self to vartable of current scope
     const ValueType type = valuetype_from_nt(GLOBDEF_TYPE(node), false);
 
-    Symbol* s = SBfromVar(name, type);
+    Symbol* s = SBfromVar(name, type, false);
     STinsert(CURRENT_SCOPE, name, s);
 
     // Save information to array symbol
@@ -604,8 +616,10 @@ node_st *CTAparam(node_st *node)
     const ValueType param_type = valuetype_from_nt(PARAM_TYPE(node), is_array);
 
     // Add parameter as variable to scope
-    Symbol* s = SBfromVar(param_name, param_type);
+    // TODO: Verify that param identifier cannot be imported (unless size is specified externally)
+    Symbol* s = SBfromVar(param_name, param_type, false);
     STinsert(CURRENT_SCOPE, param_name, s);
+    s->offset = CURRENT_SCOPE->parent_fun->offset++;
 
     if (is_array) {
         // Add array properties
@@ -643,8 +657,9 @@ node_st *CTAvardecl(node_st *node)
     const ValueType type = valuetype_from_nt(VARDECL_TYPE(node), is_array);
 
     // Create and add symbol to scope
-    Symbol* s = SBfromVar(name, type);
+    Symbol* s = SBfromVar(name, type, false);
     STinsert(CURRENT_SCOPE, name, s);
+    s->offset = CURRENT_SCOPE->parent_fun->offset++;
 
     if (is_array) {
         // Save information to array symbol
@@ -697,9 +712,14 @@ node_st *CTAassign(node_st *node)
     const ValueType expr_type = last_type;
     const bool expr_is_arith = IS_ARITH_TYPE(expr_type);
 
-    // Numbers are compatible, although implicit casting will take place
+    // Numbers are compatible
     if (let_is_arith && expr_is_arith) {
-        // If either argument is float, int is implicitly cast otherwise num
+        // If types are both arith but not same, implicit conversion takes place
+        if (let_type == VT_NUM && expr_type == VT_FLOAT) {
+            ASSIGN_EXPR(node) = ASTcast(ASSIGN_EXPR(node), CT_int);
+        } else if (let_type == VT_FLOAT && expr_type == VT_NUM) {
+            ASSIGN_EXPR(node) = ASTcast(ASSIGN_EXPR(node), CT_float);
+        }
         last_type = let_type == VT_FLOAT || expr_type == VT_FLOAT ? VT_FLOAT : VT_NUM;
     }
 
@@ -732,6 +752,12 @@ node_st *CTAbinop(node_st *node)
     // Numbers are compatible
     if (left_is_arith && right_is_arith) {
         // If either argument is float, int is implicitly cast otherwise num
+        if (left_type == VT_NUM && right_type == VT_FLOAT) {
+            BINOP_LEFT(node) = ASTcast(BINOP_LEFT(node), CT_float);
+        } else if (left_type == VT_FLOAT && right_type == VT_NUM) {
+            BINOP_RIGHT(node) = ASTcast(BINOP_RIGHT(node), CT_float);
+        }
+
         last_type = left_type == VT_FLOAT || right_type == VT_FLOAT ? VT_FLOAT : VT_NUM;
     }
 
@@ -753,7 +779,7 @@ node_st *CTAbinop(node_st *node)
  */
 node_st *CTAmonop(node_st *node)
 {
-    TRAVexpr(node);
+    TRAVoperand(node);
 
     // Confirm type is correct
     switch (MONOP_OP(node)) {
@@ -784,6 +810,11 @@ node_st *CTAvarlet(node_st *node)
     // Note: Requires array support
 
     char* name = VARLET_NAME(node);
+
+    // Rename if used as for loop variable
+    if (FOR_LOOP_NAME == name) {
+        VARLET_NAME(node) = safe_concat_str(STRcpy("_"), name);
+    }
 
     // Look up variable
     const Symbol* s = STlookup(CURRENT_SCOPE, name);
@@ -827,6 +858,11 @@ node_st *CTAvar(node_st *node)
     // Note: Requires array support
 
     char* name = VAR_NAME(node);
+
+    // Rename if used as for loop variable
+    if (FOR_LOOP_NAME == name) {
+        VAR_NAME(node) = safe_concat_str(STRcpy("_"), name);
+    }
 
     // Look up variable
     const Symbol* s = STlookup(CURRENT_SCOPE, name);

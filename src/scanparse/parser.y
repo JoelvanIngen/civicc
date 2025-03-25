@@ -164,7 +164,16 @@ fundef: opt_export_bool[export] type[t] ID[name] BRACKET_L opt_params[params] BR
           FUNDEF_PARAMS($$) = $params;
           FUNDEF_BODY($$) = $body;
           FUNDEF_EXPORT($$) = $export;
+          FUNDEF_IS_EXTERN($$) = false;
           AddLocToNode($$, &@t, &@name);
+        }
+      | EXTERN type[t] ID[name] BRACKET_L opt_params[params] BRACKET_R
+        {
+          $$ = ASTfundef($name, $t);
+          FUNDEF_PARAMS($$) = $params;
+          FUNDEF_BODY($$) = NULL;
+          FUNDEF_IS_EXTERN($$) = true;
+          AddLocToNode($$, &@1, &@6);
         }
         ;
 
@@ -258,7 +267,7 @@ forstmt: FOR BRACKET_L INTTYPE ID[var] LET expr[init] COMMA expr[stop] COMMA exp
              FOR_BLOCK($$) = $block;
              FOR_VAR($$) = $var;
            }
-         | FOR BRACKET_L ID[var] LET expr[init] COMMA expr[stop] BRACKET_R BRACE_L stmts[block] BRACE_R
+         | FOR BRACKET_L INTTYPE ID[var] LET expr[init] COMMA expr[stop] BRACKET_R BRACE_L stmts[block] BRACE_R
            {
              $$ = ASTfor($init, $stop);
              FOR_BLOCK($$) = $block;
