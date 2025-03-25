@@ -5,6 +5,17 @@
 #include "common.h"
 #include "symbol.h"
 
+/*
+Struct SymbolTable keeps track of vars that are defined
+
+name: Name of the callee
+type: Type return value of callee
+table: Contains key value pair for variables (key, symbol struct)
+*/
+typedef struct {
+    char* name;       // Name of function that the scope belongs to, or NULL if global
+    ValueType type;         // Return type that the function returns
+    htable_st* table;       // Hashtable mapping symbol name to its properties
 typedef struct SymbolTable {
     size_t offset_counter;              // Tracks offset for next variable
     size_t nesting_level;               // Nesting level; global is zero
