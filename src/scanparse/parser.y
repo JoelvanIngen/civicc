@@ -282,6 +282,11 @@ dowhilestmt: DO BRACE_L stmts[block] BRACE_R WHILE BRACKET_L expr[cond] BRACKET_
               $$ = ASTdowhile($cond);
               DOWHILE_BLOCK($$) = $block;
             }
+           | DO stmt[block] WHILE BRACKET_L expr[cond] BRACKET_R SEMICOLON
+            {
+              $$ = ASTdowhile($cond);
+              DOWHILE_BLOCK($$) = ASTstmts($block, NULL);
+            }
           ;
 
 forstmt: FOR BRACKET_L INTTYPE ID[var] LET expr[init] COMMA expr[stop] COMMA expr[step] BRACKET_R BRACE_L stmts[block] BRACE_R
