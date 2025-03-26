@@ -6,23 +6,6 @@
 
 struct SymbolTable;
 
-typedef enum {
-    ST_VALUEVAR,
-    ST_ARRAYVAR,
-    ST_FUNCTION,
-} SymbolType;
-
-typedef enum {
-    VT_NUM,
-    VT_FLOAT,
-    VT_BOOL,
-    VT_VOID,
-    VT_NUMARRAY,
-    VT_FLOATARRAY,
-    VT_BOOLARRAY,
-    VT_NULL                             // Used to set as "no value top" within the code
-} ValueType;
-
 typedef struct {
     size_t dim_count;
     size_t capacity;

@@ -18,8 +18,6 @@
 #include "symbol/scopetree.h"
 #include "symbol/table.h"
 
-static char* VT_TO_STR[] = {"int", "float", "bool", "void", "num[]", "float[]", "bool[]"};
-
 static FILE* ASM_FILE;
 static Assembly ASM;
 
@@ -51,16 +49,6 @@ char* int_to_str(const int i) {
     char* buf = MEMmalloc(MAX_STR_LEN);
     snprintf(buf, MAX_STR_LEN, "%i", i);
     return buf;
-}
-
-char* vt_to_str(const ValueType vt) {
-#ifdef DEBUGGING
-    if (vt == VT_NULL) {
-        // Should never occur
-        ERROR("Unexpected valuetype NULL %i", vt);
-    }
-#endif // DEBUGGING
-    return VT_TO_STR[vt];
 }
 
 char** generate_vt_strs(const ValueType* vts, const size_t len) {
@@ -715,9 +703,7 @@ node_st *BCbinop(node_st *node)
 
     switch (BINOP_OP(node)) {
         case BO_add:
-#ifdef DEBUGGING
-            if (left_value == VT_BOOL) ERROR("Addition was performed on boolean values");
-#endif // DEBUGGING
+            // badd is allowed; is logical disjunction of boolean values
             instr = safe_concat_str(instr, STRcpy("add"));
             break;
         case BO_sub:
@@ -727,9 +713,7 @@ node_st *BCbinop(node_st *node)
             instr = safe_concat_str(instr, STRcpy("sub"));
             break;
         case BO_mul:
-#ifdef DEBUGGING
-            if (left_value == VT_BOOL) ERROR("Multiplication was performed on boolean values");
-#endif // DEBUGGING
+            // bmul is allowed; is logical conjunction of boolean values
             instr = safe_concat_str(instr, STRcpy("mul"));
             break;
         case BO_div:
@@ -750,30 +734,36 @@ node_st *BCbinop(node_st *node)
             if (left_value == VT_BOOL) ERROR("< operator was performed on boolean values");
 #endif // DEBUGGING
             instr = safe_concat_str(instr, STRcpy("lt"));
+            LAST_TYPE = VT_BOOL;
             break;
         case BO_le:
 #ifdef DEBUGGING
             if (left_value == VT_BOOL) ERROR("<= operator was performed on boolean values");
 #endif // DEBUGGING
             instr = safe_concat_str(instr, STRcpy("le"));
+            LAST_TYPE = VT_BOOL;
             break;
         case BO_gt:
 #ifdef DEBUGGING
             if (left_value == VT_BOOL) ERROR("> operator was performed on boolean values");
 #endif // DEBUGGING
             instr = safe_concat_str(instr, STRcpy("gt"));
+            LAST_TYPE = VT_BOOL;
             break;
         case BO_ge:
 #ifdef DEBUGGING
             if (left_value == VT_BOOL) ERROR(">= operator was performed on boolean values");
 #endif // DEBUGGING
             instr = safe_concat_str(instr, STRcpy("ge"));
+            LAST_TYPE = VT_BOOL;
             break;
         case BO_eq:
             instr = safe_concat_str(instr, STRcpy("eq"));
+            LAST_TYPE = VT_BOOL;
             break;
         case BO_ne:
             instr = safe_concat_str(instr, STRcpy("ne"));
+            LAST_TYPE = VT_BOOL;
             break;
         case BO_and:
 #ifdef DEBUGGING

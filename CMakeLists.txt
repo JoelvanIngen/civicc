@@ -44,6 +44,7 @@ add_executable(civicc ${FLEX_CivicLexer_OUTPUTS} ${BISON_CivicParser_OUTPUTS}
         src/bytecode/writer.c src/bytecode/writer.h
         src/symbol/scopetree.c src/symbol/scopetree.h
         src/common.c
+        src/types/types.h
 )
 
 target_compile_options(civicc PRIVATE

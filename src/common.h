@@ -13,6 +13,10 @@
 #include "palm/memory.h"
 #include "palm/str.h"
 
+#include "ccngen/enum.h"
+
+#include "types/types.h"
+
 #define VARTABLE_STACK_SIZE 10
 #define VARTABLE_SIZE 100
 #define INITIAL_LIST_SIZE 5
@@ -41,4 +45,9 @@
 
 #define ARRAY_RESIZE(arr, new_size) (arr = MEMrealloc(arr, (new_size) * sizeof(*(arr))))
 
+char* ct_to_str(enum Type t);
+char* vt_to_str(ValueType vt);
+ValueType ct_to_vt(enum Type ct_type, bool is_array);
+char* bo_to_str(enum BinOpType op);
+char* mo_to_str(enum MonOpType op);
 char* safe_concat_str(char* s1, char* s2);

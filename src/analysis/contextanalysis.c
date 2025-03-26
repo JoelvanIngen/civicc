@@ -22,8 +22,6 @@
 #include "symbol/scopetree.h"
 #include "symbol/table.h"
 
-char* VT_TO_STR[] = {"int", "float", "bool", "void", "int[]", "float[]", "bool[]"};
-
 typedef enum {
     DECLARATION_PASS,
     ANALYSIS_PASS,
@@ -73,24 +71,7 @@ static char* FOR_LOOP_NAME = NULL;
     } \
 } while (false)
 
-ValueType valuetype_from_nt(const enum Type ct_type, const bool is_array) {
-    switch (ct_type) {
-        case CT_int: return is_array ? VT_NUMARRAY : VT_NUM;
-        case CT_float: return is_array ? VT_FLOATARRAY : VT_FLOAT;
-        case CT_bool: return is_array ? VT_BOOLARRAY : VT_BOOL;
-        case CT_void:
-            if (is_array) {
-                // Doesn't exist
-                USER_ERROR("Type error: tried to initialise void array");
-                HAD_ERROR = true;
-            }
-        return VT_VOID;
-        default:
-#ifdef DEBUGGING
-            ERROR("Unexpected CT_TYPE %i", ct_type);
-#endif // DEBUGGING
-    }
-}
+
 
 ValueType demote_array_type(const ValueType array_type) {
     switch (array_type) {
@@ -99,16 +80,9 @@ ValueType demote_array_type(const ValueType array_type) {
         case VT_BOOLARRAY: return VT_BOOL;
         default: // Should never occur
 #ifdef DEBUGGING
-            ERROR("Unexpected array type %i", array_type);
+            ERROR("Cannot demote ValueType array %i", array_type);
 #endif
     }
-}
-
-char* vt_to_string(const ValueType vt) {
-#ifdef DEBUGGING
-    ASSERT_MSG((vt >= 0 && vt < 7), "Valuetype enum out of range: %i", vt);
-#endif
-    return VT_TO_STR[vt];
 }
 
 static void exit_if_error() {
@@ -293,7 +267,7 @@ node_st *CTAreturn(node_st *node)
     const ValueType parent_fun_type = CURRENT_SCOPE->parent_fun->vtype;
     if (ret_type != parent_fun_type) {
         USER_ERROR("Trying to return %s from function with type %s",
-            vt_to_string(ret_type), vt_to_string(parent_fun_type));
+            vt_to_str(ret_type), vt_to_str(parent_fun_type));
     }
 
     return node;
@@ -354,7 +328,7 @@ node_st *CTAfuncall(node_st *node)
         // Error if not similar type
         if (arg->type != param_types[i]) {
             USER_ERROR("Argument type %s and parameter type %s don't match",
-                vt_to_string(arg->type), vt_to_string(param_types[i]));
+                vt_to_str(arg->type), vt_to_str(param_types[i]));
             return node;
         }
 
@@ -383,10 +357,10 @@ node_st *CTAcast(node_st *node)
     TRAVchildren(node);
     if (!(LAST_TYPE == VT_NUM || LAST_TYPE == VT_FLOAT || LAST_TYPE == VT_BOOL)) {
         USER_ERROR("Invalid cast source, can only cast from Num, Float or Bool but got %s",
-            vt_to_string(LAST_TYPE));
+            vt_to_str(LAST_TYPE));
     }
 
-    LAST_TYPE = valuetype_from_nt(CAST_TYPE(node), false);
+    LAST_TYPE = ct_to_vt(CAST_TYPE(node), false);
     return node;
 }
 
@@ -405,7 +379,7 @@ node_st *CTAfundefs(node_st *node)
 node_st *CTAfundef(node_st *node)
 {
     char* fun_name = FUNDEF_NAME(node);
-    const ValueType ret_type = valuetype_from_nt(FUNDEF_TYPE(node), false);
+    const ValueType ret_type = ct_to_vt(FUNDEF_TYPE(node), false);
 
     if (PASS == DECLARATION_PASS) {
         /* First pass: only return information about self */
@@ -527,7 +501,7 @@ node_st *CTAglobdecl(node_st *node)
 
     // Add self to vartable of current scope
     Symbol* s;
-    const ValueType type = valuetype_from_nt(GLOBDECL_TYPE(node), is_array);
+    const ValueType type = ct_to_vt(GLOBDECL_TYPE(node), is_array);
 
     if (is_array) {
         s = SBfromArray(name, type, true);
@@ -559,7 +533,7 @@ node_st *CTAglobdef(node_st *node)
     handle_array_dims_exprs_for_dims_macro(node);
 
     // Add self to vartable of current scope
-    const ValueType type = valuetype_from_nt(GLOBDEF_TYPE(node), false);
+    const ValueType type = ct_to_vt(GLOBDEF_TYPE(node), false);
 
     Symbol* s = SBfromVar(name, type, false);
     STinsert(CURRENT_SCOPE, name, s);
@@ -581,10 +555,10 @@ node_st *CTAglobdef(node_st *node)
 
     // TODO: Check if types implicitly cast
     // We can use last_type because globdef always has an init child
-    if (valuetype_from_nt(GLOBDEF_TYPE(node), is_array) != LAST_TYPE) {
+    if (ct_to_vt(GLOBDEF_TYPE(node), is_array) != LAST_TYPE) {
         USER_ERROR("Variable of type %s was initialised with expression of type %s",
-            vt_to_string(valuetype_from_nt(GLOBDEF_TYPE(node), is_array)),
-            vt_to_string(LAST_TYPE));
+            vt_to_str(ct_to_vt(GLOBDEF_TYPE(node), is_array)),
+            vt_to_str(LAST_TYPE));
     }
 
     // TODO: Allow scalar to init array
@@ -611,7 +585,7 @@ node_st *CTAparam(node_st *node)
     const bool is_array = IDL->ptr > 0;
 
     // Add self to vartable of current scope
-    const ValueType param_type = valuetype_from_nt(PARAM_TYPE(node), is_array);
+    const ValueType param_type = ct_to_vt(PARAM_TYPE(node), is_array);
 
     // Add parameter as variable to scope
     // TODO: Verify that param identifier cannot be imported (unless size is specified externally)
@@ -651,7 +625,7 @@ node_st *CTAvardecl(node_st *node)
     const DimsList* dml = DLSpeekTop(DLS);
     const bool is_array = dml->size > 0;
 
-    const ValueType type = valuetype_from_nt(VARDECL_TYPE(node), is_array);
+    const ValueType type = ct_to_vt(VARDECL_TYPE(node), is_array);
 
     // Create and add symbol to scope
     Symbol* s = SBfromVar(name, type, false);
@@ -677,7 +651,7 @@ node_st *CTAvardecl(node_st *node)
         // TODO: Find out if types implicitly cast
         if (s->vtype != LAST_TYPE) {
             USER_ERROR("Tried to initialise variable %s with %s",
-                vt_to_string(s->vtype), vt_to_string(LAST_TYPE));
+                vt_to_str(s->vtype), vt_to_str(LAST_TYPE));
         }
     }
 
@@ -727,7 +701,7 @@ node_st *CTAassign(node_st *node)
 
     else {
         USER_ERROR("Operands not compatible: %s and %s",
-            vt_to_string(let_type), vt_to_string(expr_type));
+            vt_to_str(let_type), vt_to_str(expr_type));
     }
 
     return node;
@@ -765,7 +739,7 @@ node_st *CTAbinop(node_st *node)
 
     else {
         USER_ERROR("Operands not compatible: %s and %s",
-            vt_to_string(left_type), vt_to_string(right_type));
+            vt_to_str(left_type), vt_to_str(right_type));
     }
 
     // Check individual operators with types
@@ -773,17 +747,24 @@ node_st *CTAbinop(node_st *node)
     if (left_is_arith) {
         if (!(t == BO_add || t == BO_sub || t == BO_mul || t == BO_div || t == BO_mod ||
               t == BO_eq || t == BO_ne || t == BO_lt || t == BO_le || t == BO_gt || t == BO_ge)) {
-            USER_ERROR("Invalid operands %s and %s for operator %i",
-                vt_to_string(left_type), vt_to_string(right_type), t);
+            USER_ERROR("Invalid operands %s and %s for operator %s",
+                vt_to_str(left_type), vt_to_str(right_type), bo_to_str(t));
+        }
+
+        // If equality operator, LAST_TYPE should become boolean
+        if (t == BO_eq || t == BO_ne || t == BO_lt || t == BO_le || t == BO_gt || t == BO_ge) {
+            LAST_TYPE = VT_BOOL;
         }
     } else if (left_type == VT_BOOL) {
-        if (!(t == BO_add || t == BO_sub || t == BO_eq || t == BO_ne || t == BO_and || t == BO_or)) {
-            USER_ERROR("Invalid operands %s and %s for operator %i",
-                vt_to_string(left_type), vt_to_string(right_type), t);
+        // BO_add and BO_mul are strict logic disjunction and conjunction, respectively
+        if (!(t == BO_add || t == BO_mul || t == BO_eq || t == BO_ne || t == BO_and || t == BO_or)) {
+            USER_ERROR("Invalid operands %s and %s for operator %s",
+                vt_to_str(left_type), vt_to_str(right_type), bo_to_str(t));
         }
+        LAST_TYPE = VT_BOOL;
     } else {
 #ifdef DEBUGGING
-        ERROR("Unexpected operand %s is not arith or bool", vt_to_string(left_type));
+        ERROR("Unexpected operand %s is not arith or bool", vt_to_str(left_type));
 #endif // DEBUGGING
     }
 
@@ -802,15 +783,15 @@ node_st *CTAmonop(node_st *node)
         // TODO: Find out if negated bool switches values (probably not)
         case MO_neg:
             if (!(LAST_TYPE == VT_NUM || LAST_TYPE == VT_FLOAT)) {
-                USER_ERROR("Expected operand type Int or Float, got %s instead", vt_to_string(LAST_TYPE));
+                USER_ERROR("Expected operand type Int or Float, got %s instead", vt_to_str(LAST_TYPE));
             }
             break;
         case MO_not: if (LAST_TYPE != VT_BOOL) {
-                USER_ERROR("Expected operand type Bool, got %s instead", vt_to_string(LAST_TYPE));
+                USER_ERROR("Expected operand type Bool, got %s instead", vt_to_str(LAST_TYPE));
             }
             break;
         default: /* Should never occur */
-            USER_ERROR("Unexpected error comparing monop type and expected type");
+            USER_ERROR("Unknown monop %s with operand %s", mo_to_str(MONOP_OP(node)), vt_to_str(LAST_TYPE));
     }
 
     return node;
