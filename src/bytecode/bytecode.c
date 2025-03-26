@@ -306,22 +306,116 @@ node_st *BCfuncall(node_st *node)
 /**
  * @fn BCcast
  */
-node_st *BCcast(node_st *node)
-{
+node_st *BCcast(node_st *node) {
     TRAVchildren(node);
 
+    // INTEGER AND FLOAT
     if (LAST_TYPE == VT_NUM && CAST_TYPE(node) == CT_float) {
         Instr("i2f", NULL, NULL, NULL);
-        LAST_TYPE = VT_FLOAT;
     } else if (LAST_TYPE == VT_FLOAT && CAST_TYPE(node) == CT_int) {
         Instr("f2i", NULL, NULL, NULL);
-        LAST_TYPE = VT_NUM;
+    }
+
+    // BOOLEAN AND INTEGER
+    else if (LAST_TYPE == VT_NUM && CAST_TYPE(node) == CT_bool) {
+        /* Create instructions for
+         * if ([lastvalue] != 0) {
+         *     [push] true
+         * } else {
+         *     [push] false
+         * }
+         */
+
+        char* else_label_name = generate_label_name(STRcpy("else"));
+        char* endif_label_name = generate_label_name(STRcpy("end"));
+
+        Instr("iloadc_0", NULL, NULL, NULL);
+        Instr("ine", NULL, NULL, NULL);
+        Instr("branch_f", else_label_name, NULL, NULL);
+        Instr("bloadc_t", NULL, NULL, NULL);
+        Instr("jump", endif_label_name, NULL, NULL);
+        Label(else_label_name, false);
+        Instr("bloadc_f", NULL, NULL, NULL);
+        Label(endif_label_name, false);
+
+        MEMfree(else_label_name);
+        MEMfree(endif_label_name);
+    } else if (LAST_TYPE == VT_BOOL && CAST_TYPE(node) == CT_int) {
+        /* Create instructions for
+         * if ([lastvalue]) {
+         *     [push] 1
+         * } else {
+         *     [push] 0
+         * }
+         */
+
+        char* else_label_name = generate_label_name(STRcpy("else"));
+        char* endif_label_name = generate_label_name(STRcpy("end"));
+
+        Instr("branch_f", else_label_name, NULL, NULL);
+        Instr("iloadc_1", NULL, NULL, NULL);
+        Instr("jump", endif_label_name, NULL, NULL);
+        Label(else_label_name, false);
+        Instr("iloadc_0", NULL, NULL, NULL);
+        Label(endif_label_name, false);
+
+        MEMfree(else_label_name);
+        MEMfree(endif_label_name);
+    }
+
+    // BOOLEAN AND FLOAT
+    else if (LAST_TYPE == VT_FLOAT && CAST_TYPE(node) == CT_bool) {
+        /* Create instructions for
+         * if ([lastvalue] != 0.0) {
+         *     [push] true
+         * } else {
+         *     [push] false
+         * }
+         */
+
+        char* else_label_name = generate_label_name(STRcpy("else"));
+        char* endif_label_name = generate_label_name(STRcpy("end"));
+
+        Instr("floadc_0", NULL, NULL, NULL);
+        Instr("ine", NULL, NULL, NULL);
+        Instr("branch_f", else_label_name, NULL, NULL);
+        Instr("bloadc_t", NULL, NULL, NULL);
+        Instr("jump", endif_label_name, NULL, NULL);
+        Label(else_label_name, false);
+        Instr("bloadc_f", NULL, NULL, NULL);
+        Label(endif_label_name, false);
+
+        MEMfree(else_label_name);
+        MEMfree(endif_label_name);
+    } else if (LAST_TYPE == VT_BOOL && CAST_TYPE(node) == CT_float) {
+        /* Create instructions for
+         * if ([lastvalue]) {
+         *     [push] 1.0
+         * } else {
+         *     [push] 0.0
+         * }
+         */
+
+        char* else_label_name = generate_label_name(STRcpy("else"));
+        char* endif_label_name = generate_label_name(STRcpy("end"));
+
+        Instr("branch_f", else_label_name, NULL, NULL);
+        Instr("floadc_1", NULL, NULL, NULL);
+        Instr("jump", endif_label_name, NULL, NULL);
+        Label(else_label_name, false);
+        Instr("floadc_0", NULL, NULL, NULL);
+        Label(endif_label_name, false);
+
+        MEMfree(else_label_name);
+        MEMfree(endif_label_name);
     } else {
         // Should never occur
 #ifdef DEBUGGING
-        ERROR("Unexpected cast from VT type %i to CT type %i", LAST_TYPE, CAST_TYPE(node));
+        ERROR("Unexpected cast from VT type %s to CT type %i", vt_to_str(LAST_TYPE), CAST_TYPE(node));
 #endif // DEBUGGING
     }
+
+    LAST_TYPE = ct_to_vt(CAST_TYPE(node), false);
 
     /**
      * Traverse children
