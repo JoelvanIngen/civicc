@@ -260,11 +260,18 @@ node_st *PRTglobdecl(node_st *node)  // TODO: ADD DIMS
 /**
  * @fn PRTglobdef
  */
-node_st *PRTglobdef(node_st *node)  // TODO: ADD DIMS, INIT
+node_st *PRTglobdef(node_st *node)  // TODO: ADD DIMS
 {
     printf("GLOBDEF(export=%s name=%s, type=%s)",
         bool_to_string(GLOBDEF_EXPORT(node)), GLOBDEF_NAME(node), type_to_string(GLOBDEF_TYPE(node)));
-    TRAVchildren(node);
+
+    if (GLOBDEF_INIT(node) != NULL) {
+        printf(" <- ");
+        TRAVinit(node);
+    }
+
+    printf("\n");
+
     return node;
 }
 
