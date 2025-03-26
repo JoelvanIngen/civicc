@@ -7,6 +7,7 @@
  *
  */
 
+#include "common.h"
 #include "ccn/ccn.h"
 #include "ccngen/ast.h"
 #include "ccngen/enum.h"
@@ -282,6 +283,10 @@ node_st *PRTglobdef(node_st *node)  // TODO: ADD DIMS
  */
 node_st *PRTparam(node_st *node)
 {
+    printf("%s %s", ct_to_str(PARAM_TYPE(node)), PARAM_NAME(node));
+    if (PARAM_NEXT(node) != NULL) {
+        printf(", ");
+    }
     TRAVchildren(node);
     return node;
 }

@@ -34,6 +34,7 @@ static ValueType LAST_TYPE;
 static SymbolTable* CURRENT_SCOPE;
 
 // Stacking nested function calls
+static bool SAVING_ARGS = false;
 static ArgListStack* ALS;
 
 // Stacking nested array indexing
@@ -67,8 +68,6 @@ static bool HAD_ERROR = false;
         return node; \
     } \
 } while (false)
-
-
 
 ValueType demote_array_type(const ValueType array_type) {
     switch (array_type) {
@@ -137,6 +136,48 @@ static void handle_array_dims_exprs_for_dims_macro(node_st* node) {
     SAVING_IDXS = was_saving_idxs;
 }
 
+static size_t count_params(node_st* first_param) {
+    if (first_param == NULL) {
+        return 0;
+    }
+
+    size_t tot = 0;
+    node_st* param = first_param;
+    while (param != NULL) {
+        tot++;
+        param = PARAM_NEXT(param);
+    }
+
+    return tot;
+}
+
+static size_t count_exprs(node_st* first_expr) {
+    if (first_expr == NULL) {
+        return 0;
+    }
+
+    size_t tot = 0;
+    node_st* expr = first_expr;
+    while (expr != NULL) {
+        tot++;
+        expr = PARAM_NEXT(expr);
+    }
+
+    return tot;
+}
+
+static void find_param_types(node_st* first_param, Symbol* s, size_t param_count) {
+    if (param_count == 0) {
+        return;
+    }
+
+    node_st* param = first_param;
+    for (size_t i = 0; i < param_count; i++) {
+        s->as.fun.param_types[i] = ct_to_vt(PARAM_TYPE(param), false);
+        param = PARAM_NEXT(param);
+    }
+}
+
 void CTAinit() {  }
 void CTAfini() {
     // Free functions also delete any leftovers, we don't worry about cleaning up
@@ -192,9 +233,14 @@ node_st *CTAexprs(node_st *node)
     // Keep state of index keeping and set to false to prevent children from adding themselves
     const bool was_saving_idxs = SAVING_IDXS;
 
+    // Keep state of argument keeping and set to false to prevent children from adding themselves
+    const bool was_saving_args = SAVING_ARGS;
+
     SAVING_IDXS = false;
+    SAVING_ARGS = false;
     TRAVexpr(node);
     SAVING_IDXS = was_saving_idxs;
+    SAVING_ARGS = was_saving_args;
 
     if (SAVING_IDXS) {
         // TODO: Find out which values are allowed (can floats be used for index, does bool cast to idx 0 or 1)?
@@ -208,6 +254,10 @@ node_st *CTAexprs(node_st *node)
         // since we do want to keep the amount of dimensions for analysis
         // We'll just use 0 until we rework this
         DLSadd(DLS, 0);
+    }
+
+    if (SAVING_ARGS) {
+        ALSadd(ALS, LAST_TYPE);
     }
 
     TRAVnext(node);
@@ -294,8 +344,12 @@ node_st *CTAfuncall(node_st *node)
     }
 
     // Push new function call stack to allow for nested function calls
+    const bool was_saving_args = SAVING_ARGS;
+    SAVING_ARGS = true;
+    // printf("Put SAVING_ARGS to %i\n", SAVING_ARGS);
     ALSpush(ALS);
     TRAVchildren(node);
+    SAVING_ARGS = was_saving_args;
 
     // Arguments provided in function call
     Argument** args = ALSgetCurrentArgs(ALS);
@@ -328,8 +382,8 @@ node_st *CTAfuncall(node_st *node)
         // Error if not similar type
         if (arg->type != param_types[i]) {
             HAD_ERROR = true;
-            USER_ERROR("Argument type %s and parameter type %s don't match",
-                vt_to_str(arg->type), vt_to_str(param_types[i]));
+            USER_ERROR("Argument type %s and parameter type %s (%i) don't match",
+                vt_to_str(arg->type), vt_to_str(param_types[i]), param_types[i]);
             return node;
         }
 
@@ -387,7 +441,12 @@ node_st *CTAfundef(node_st *node)
     if (PASS == DECLARATION_PASS) {
         /* First pass: only return information about self */
         const bool is_extern = FUNDEF_IS_EXTERN(node);
-        Symbol* s = SBfromFun(fun_name, ret_type, is_extern);
+
+        const size_t param_count = count_params(FUNDEF_PARAMS(node));
+        Symbol* s = SBfromFun(fun_name, ret_type, param_count, is_extern);
+
+        // Find parameter types
+        find_param_types(FUNDEF_PARAMS(node), s, s->as.fun.param_count);
 
         if (!is_extern) {
             s->as.fun.scope = STnew(CURRENT_SCOPE, s);
@@ -398,7 +457,7 @@ node_st *CTAfundef(node_st *node)
         /* Second pass: explore information about own statements
          * Here we also detect if variables are wrongly typed */
 
-        const Symbol* s = STlookup(CURRENT_SCOPE, fun_name);
+        Symbol* s = STlookup(CURRENT_SCOPE, fun_name);
 
         // Only explore if not extern
         if (!s->imported) {
@@ -629,7 +688,7 @@ node_st *CTAparam(node_st *node)
 
     // Add parameter to the function it belongs to
     Symbol* parent_fun = CURRENT_SCOPE->parent_fun;
-    SBaddParam(parent_fun, param_type, IDL->ptr);
+    SBaddParam(parent_fun, IDL->ptr);
 
     IDLfree(&IDL);
 

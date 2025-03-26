@@ -32,18 +32,13 @@ static AL* ALnew() {
 }
 
 static void ALfree(AL* al) {
-    for (size_t i = 0; i < al->ptr; i++) {
-        MEMfree(al->args[i].name);
-    }
-
     free(al->args);
     free(al);
 }
 
-void ALadd(AL* al, char* name, const ValueType type) {
+void ALadd(AL* al, const ValueType type) {
     checkResizeAL(al);
     al->args[al->ptr].type = type;
-    al->args[al->ptr].name = STRcpy(name);
     al->ptr++;
 }
 
@@ -82,8 +77,8 @@ void ALSpop(ALS* als) {
 }
 
 /** Adds a new parameter on the current funcall */
-void ALSadd(ALS* als, char* name, const ValueType type) {
-    ALadd(als->fun_calls[als->ptr - 1], name, type);
+void ALSadd(ALS* als, const ValueType type) {
+    ALadd(als->fun_calls[als->ptr - 1], type);
 }
 
 /** Points to the first argument of the current scope */

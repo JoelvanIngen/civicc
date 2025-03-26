@@ -181,7 +181,7 @@ fundef: opt_export_bool[export] type[t] ID[name] BRACKET_L opt_params[params] BR
           FUNDEF_IS_EXTERN($$) = false;
           AddLocToNode($$, &@t, &@name);
         }
-      | EXTERN type[t] ID[name] BRACKET_L opt_params[params] BRACKET_R
+      | EXTERN type[t] ID[name] BRACKET_L opt_params[params] BRACKET_R SEMICOLON
         {
           $$ = ASTfundef($name, $t);
           FUNDEF_PARAMS($$) = $params;

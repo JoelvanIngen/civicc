@@ -25,15 +25,17 @@ static Symbol* SBnew(char* name, const ValueType vt, const bool imported) {
  * Creates a new symbol for a function identifier
  * @param name name of the function
  * @param vt return type of function
+ * @param param_count amount of parameters the function expects
  * @param imported boolean that sets whether the function was imported from an external file
  * @return pointer to new symbol struct
  */
-Symbol* SBfromFun(char* name, const ValueType vt, const bool imported) {
+Symbol* SBfromFun(char* name, const ValueType vt, const size_t param_count, const bool imported) {
     Symbol* s = SBnew(name, vt, imported);
     s->stype = ST_FUNCTION;
-    s->as.fun.param_count = 0;
-    s->as.fun.param_types = MEMmalloc(INITIAL_LIST_SIZE * sizeof(ValueType));
-    s->as.fun.param_dim_counts = MEMmalloc(INITIAL_LIST_SIZE * sizeof(size_t));
+    s->as.fun.param_count = param_count;
+    s->as.fun.param_ptr = 0;
+    s->as.fun.param_types = MEMmalloc(sizeof(ValueType) * param_count);
+    s->as.fun.param_dim_counts = MEMmalloc(sizeof(size_t) * param_count);
     return s;
 }
 
@@ -87,7 +89,7 @@ void SBfree(Symbol** s_ptr) {
         case ST_FUNCTION:
             MEMfree(s->as.fun.param_types);
             MEMfree(s->as.fun.param_dim_counts);
-            STfree(&s->as.fun.scope);
+            if (!s->imported) STfree(&s->as.fun.scope);
             break;
         case ST_ARRAYVAR:
             MEMfree(s->as.array.dims); break;
@@ -138,18 +140,12 @@ void SBaddDim(Symbol* s, size_t dim) {
  * increase the array size, and add new vallue to the array (params)
  * otherwise add value to params and increase param count.
 */
-void SBaddParam(Symbol* s, ValueType const vt, size_t dim_count) {
+void SBaddParam(Symbol* s, size_t dim_count) {
 #ifdef DEBUGGING
     ASSERT_MSG((s != NULL), "Got NULL value for symbol to add parameters to");
     ASSERT_MSG((s->stype == ST_FUNCTION), "Tried to add parameter for non-function symbol");
 #endif
-    if (s->as.fun.param_count + 1 >= s->as.fun.capacity) {
-        s->as.fun.capacity *= 2;
-        s->as.fun.param_types = MEMrealloc(s->as.fun.param_types, s->as.fun.capacity * sizeof(size_t));
-        s->as.fun.param_dim_counts = MEMrealloc(s->as.fun.param_dim_counts, s->as.fun.capacity * sizeof(size_t));
-    }
 
-    s->as.fun.param_types[s->as.fun.param_count] = vt;
-    s->as.fun.param_dim_counts[s->as.fun.param_count] = dim_count;
-    s->as.fun.param_count++;
+    s->as.fun.param_dim_counts[s->as.fun.param_ptr] = dim_count;
+    s->as.fun.param_ptr++;
 }

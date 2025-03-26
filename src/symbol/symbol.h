@@ -14,7 +14,7 @@ typedef struct {
 
 typedef struct {
     size_t param_count;
-    size_t capacity;
+    size_t param_ptr;
     ValueType* param_types;
     size_t* param_dim_counts;           // Only non-zero for param_types that are arrays
     struct SymbolTable* scope;          // Scope belonging to this function
@@ -39,10 +39,10 @@ typedef struct {
     } as;
 } Symbol;
 
-Symbol* SBfromFun(char* name, ValueType vt, bool imported);
+Symbol* SBfromFun(char* name, ValueType vt, size_t param_count, bool imported);
 Symbol* SBfromArray(char* name, ValueType vt, bool imported);
 Symbol* SBfromVar(char* name, ValueType vt, bool imported);
 Symbol* SBfromForLoop(char* adjusted_name);
 void SBfree(Symbol** s_ptr);
 void SBaddDim(Symbol* s, size_t dim);
-void SBaddParam(Symbol* s, ValueType vt, size_t dim_count);
+void SBaddParam(Symbol* s, size_t dim_count);
