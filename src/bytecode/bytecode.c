@@ -467,7 +467,7 @@ node_st *BCwhile(node_st *node)
 
     Label(while_start_name, false);
 
-    TRAVexpr(node);
+    TRAVcond(node);
 
     Instr("branch_f", while_end_name, NULL, NULL);
 
@@ -502,7 +502,7 @@ node_st *BCdowhile(node_st *node)
 
     TRAVblock(node);
 
-    TRAVexpr(node);
+    TRAVcond(node);
 
     Instr("branch_t", while_start_name, NULL, NULL);
 
