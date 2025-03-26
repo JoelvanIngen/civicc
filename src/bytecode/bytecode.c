@@ -873,7 +873,6 @@ node_st *BCvarlet(node_st *node)
         instr = safe_concat_str(instr, STRcpy("store"));
         char* var_offset_str = int_to_str((int) var_offset);
         Instr(instr, var_offset_str, NULL, NULL);
-        MEMfree(instr);
         MEMfree(var_offset_str);
     }
 
@@ -887,6 +886,8 @@ node_st *BCvarlet(node_st *node)
         Instr(instr, var_delta_str, int_to_str((int) var_offset), NULL);
         MEMfree(var_delta_str);
     }
+
+    MEMfree(instr);
 
     /**
      * Find which scope variable is from
