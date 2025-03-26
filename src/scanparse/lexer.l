@@ -6,6 +6,7 @@
 
 #include "ccngen/ast.h"
 #include "ccngen/enum.h"
+#include <limits.h>
 #include "parser.h"
 #include "palm/str.h"
 #include "global/globals.h"
@@ -99,8 +100,20 @@ int yycolumn = 1;
                              FILTER(ID);
                            }
 
-[0-9]+                     { yylval.cint=atoi(yytext);
-                             FILTER(NUM);
+[0-9]+                     { 
+                             errno = 0;
+                             char* endptr;
+                             long val = strtol(yytext, &endptr, 10);
+
+                             if (errno == ERANGE || val > INT_MAX || val < INT_MIN) {
+                               // Overflow
+                               char err_buf[256];
+                               snprintf(err_buf, sizeof(err_buf), "Integer %s overflows", yytext);
+                               yyerror(err_buf);
+                             } else {
+                               yylval.cint = atoi(yytext);
+                               FILTER(NUM);
+                             }
                            }
 
 [0-9]+"."[0-9]+            { yylval.cflt=atof(yytext);

@@ -1005,10 +1005,6 @@ node_st *CTAnum(node_st *node)
 {
     TRAVchildren(node);
     LAST_TYPE = VT_NUM;
-    if (NUM_VAL(node) > INT_MAX) {
-        HAD_ERROR = true;
-        USER_ERROR("Integer exceeds max value of %i", INT_MAX);
-    }
     return node;
 }
 
