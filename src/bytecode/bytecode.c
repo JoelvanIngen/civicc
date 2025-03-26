@@ -123,8 +123,7 @@ static void init() {
 }
 
 static void fini() {
-    // TODO: probably make filename command-line argument
-    ASM_FILE = fopen("bytecode.asm", "w");
+    ASM_FILE = fopen(global.output_file, "w");
     if (ASM_FILE == NULL) {
         fprintf(stderr, "Error creating bytecode file");
         exit(1);
