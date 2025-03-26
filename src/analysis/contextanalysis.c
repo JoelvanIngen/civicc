@@ -489,6 +489,9 @@ node_st *CTAglobdecl(node_st *node)
 {
     // Note: Requires array support
 
+    // Immediate exit if phase is not DECLARATION_PASS to prevent adding twice
+    if (PASS != DECLARATION_PASS) return node;
+
     char* name = GLOBDECL_NAME(node);
 
     HANDLE_DUPLICATE_ID(name);
@@ -524,6 +527,9 @@ node_st *CTAglobdecl(node_st *node)
 node_st *CTAglobdef(node_st *node)
 {
     // Note: Requires array support
+
+    // Immediate exit if phase is not DECLARATION_PASS to prevent adding twice
+    if (PASS != DECLARATION_PASS) return node;
 
     char* name = GLOBDEF_NAME(node);
 
