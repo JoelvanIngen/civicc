@@ -110,8 +110,8 @@ void add_importvars() {
             const Symbol *s = HTiterValue(iter);
 
             if (s->imported) {
-                if (s->offset > (size_t) highest_found) highest_found = (int) s->offset;
-                if (s->offset == (size_t) highest_saved + 1) {
+                if ((int) s->offset > highest_found) highest_found = (int) s->offset;
+                if ((int) s->offset == highest_saved + 1) {
                     // TODO: Save the thing
                     highest_saved++;
                 }
