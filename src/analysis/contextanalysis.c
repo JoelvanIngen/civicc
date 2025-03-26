@@ -49,6 +49,12 @@ static IdList* IDL = NULL;
 // Keeps track of whether we had an error during analysis
 static bool HAD_ERROR = false;
 
+static size_t GLOBAL_VAR_OFFSET = 0;
+static size_t FUN_IMPORT_OFFSET = 0;
+static size_t VAR_IMPORT_OFFSET = 0;
+static size_t FUN_EXPORT_OFFSET = 0;
+static size_t VAR_EXPORT_OFFSET = 0;
+
 #define IS_ARITH_TYPE(vt) (vt == VT_NUM || vt == VT_FLOAT)
 #define IS_ARRAY(vt) (vt == VT_NUMARRAY || vt == VT_FLOATARRAY || vt == VT_BOOLARRAY)
 
@@ -284,6 +290,8 @@ node_st *CTAids(node_st *node)
     IDLadd(IDL, name);
 
     // Add name to scope as type integer
+    // TODO: Add to scope as symbol
+    // TODO: Add offset
     STinsert(CURRENT_SCOPE, name, VT_NUM);
 
     TRAVchildren(node);
@@ -450,6 +458,9 @@ node_st *CTAfundef(node_st *node)
 
         if (!is_extern) {
             s->as.fun.scope = STnew(CURRENT_SCOPE, s);
+        } else {
+            s->offset = FUN_IMPORT_OFFSET;
+            FUN_IMPORT_OFFSET++;
         }
 
         STinsert(CURRENT_SCOPE, fun_name, s);
@@ -595,6 +606,7 @@ node_st *CTAglobdecl(node_st *node)
         s = SBfromVar(name, type, true);
     }
 
+    s->offset = VAR_EXPORT_OFFSET++;
     STinsert(CURRENT_SCOPE, name, s);
 
     // Clean up - note: free function does not (yet) free internal ids list
@@ -624,6 +636,7 @@ node_st *CTAglobdef(node_st *node)
     const ValueType type = ct_to_vt(GLOBDEF_TYPE(node), false);
 
     Symbol* s = SBfromVar(name, type, false);
+    s->offset = GLOBAL_VAR_OFFSET++;
     STinsert(CURRENT_SCOPE, name, s);
 
     // Save information to array symbol
@@ -678,8 +691,8 @@ node_st *CTAparam(node_st *node)
     // Add parameter as variable to scope
     // TODO: Verify that param identifier cannot be imported (unless size is specified externally)
     Symbol* s = SBfromVar(param_name, param_type, false);
+    s->offset = CURRENT_SCOPE->localvar_offset_counter++;
     STinsert(CURRENT_SCOPE, param_name, s);
-    s->offset = CURRENT_SCOPE->parent_fun->offset++;
 
     if (is_array) {
         // Add array properties
@@ -717,8 +730,8 @@ node_st *CTAvardecl(node_st *node)
 
     // Create and add symbol to scope
     Symbol* s = SBfromVar(name, type, false);
+    s->offset = CURRENT_SCOPE->localvar_offset_counter++;
     STinsert(CURRENT_SCOPE, name, s);
-    s->offset = CURRENT_SCOPE->parent_fun->offset++;
 
     if (is_array) {
         // Save information to array symbol
@@ -992,6 +1005,10 @@ node_st *CTAnum(node_st *node)
 {
     TRAVchildren(node);
     LAST_TYPE = VT_NUM;
+    if (NUM_VAL(node) > INT_MAX) {
+        HAD_ERROR = true;
+        USER_ERROR("Integer exceeds max value of %i", INT_MAX);
+    }
     return node;
 }
 

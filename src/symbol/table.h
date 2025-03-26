@@ -9,7 +9,7 @@
 Struct SymbolTable keeps track of vars that are defined
 */
 typedef struct SymbolTable {
-    size_t offset_counter;              // Tracks offset for next variable
+    size_t localvar_offset_counter;     // Tracks offset for next variable
     size_t nesting_level;               // Nesting level; global is zero
     size_t for_loop_counter;            // Counter for for_loops
     struct SymbolTable* parent_scope;   // Pointer to parent scope

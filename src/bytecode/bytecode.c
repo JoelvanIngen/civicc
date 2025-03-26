@@ -92,7 +92,9 @@ void add_importvars() {
     int highest_found = -1;
     int highest_saved = -1;
 
+    int prev_highest_saved = highest_saved;
     do {
+        // printf("CHECKPOINT: found: %i, saved: %i\n", highest_found, highest_saved); fflush(stdout);
         for (htable_iter_st *iter = HTiterate(GB_GLOBAL_SCOPE->table); iter;
                 iter = HTiterateNext(iter)) {
             const Symbol *s = HTiterValue(iter);
@@ -105,6 +107,12 @@ void add_importvars() {
                 }
             }
         }
+
+#ifdef DEBUGGING
+        if (highest_saved == prev_highest_saved && highest_found != highest_saved) {
+            ERROR("Loop stuck; highest found: %i, highest saved: %i", highest_found, highest_saved);
+        }
+#endif // DEBUGGING
     } while (highest_found != highest_saved);
 }
 
@@ -487,8 +495,8 @@ node_st *BCfunbody(node_st *node)
     Label(generate_unique_fun_name(CURRENT_SCOPE->parent_fun), true);
 
     // Only write "esr" if at least one variable will be initialised
-    if (CURRENT_SCOPE->offset_counter > 0) {
-        char* offset_str = int_to_str((int) CURRENT_SCOPE->offset_counter);
+    if (CURRENT_SCOPE->localvar_offset_counter > 0) {
+        char* offset_str = int_to_str((int) CURRENT_SCOPE->localvar_offset_counter);
         Instr("esr", offset_str, NULL, NULL);
         MEMfree(offset_str);
     }

@@ -117,7 +117,7 @@ int yycolumn = 1;
 [ \t]                      { global.col += yyleng;
                            }
 
-.                          { fprintf(stderr, "LEXER: unexpected character '%s' at line %d, column %d\n", yytext, yylineno, yycolumn); }
+.                          { fprintf(stderr, "LEXER: unexpected character '%s' at line %d, column %d\n", yytext, yylineno, yycolumn); exit(1); }
 %%
 
 static inline void token_action() {

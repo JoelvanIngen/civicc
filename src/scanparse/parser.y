@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <limits.h>
 #include "palm/memory.h"
 #include "palm/ctinfo.h"
 #include "palm/dbug.h"
