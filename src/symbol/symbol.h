@@ -13,6 +13,7 @@ typedef struct {
 } ArrayData;
 
 typedef struct {
+    char* label_name;
     size_t param_count;
     size_t param_ptr;
     ValueType* param_types;

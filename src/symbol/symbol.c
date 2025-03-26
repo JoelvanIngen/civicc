@@ -17,6 +17,7 @@ static Symbol* SBnew(char* name, const ValueType vt, const bool imported) {
     s->vtype = vt;
     s->name = STRcpy(name);
     s->imported = imported;
+    s->exported = false;
     s->parent_scope = NULL;
     return s;
 }
@@ -32,6 +33,7 @@ static Symbol* SBnew(char* name, const ValueType vt, const bool imported) {
 Symbol* SBfromFun(char* name, const ValueType vt, const size_t param_count, const bool imported) {
     Symbol* s = SBnew(name, vt, imported);
     s->stype = ST_FUNCTION;
+    s->as.fun.label_name = NULL;
     s->as.fun.param_count = param_count;
     s->as.fun.param_ptr = 0;
     s->as.fun.param_types = MEMmalloc(sizeof(ValueType) * param_count);
@@ -87,6 +89,7 @@ void SBfree(Symbol** s_ptr) {
     Symbol* s = *s_ptr;
     switch (s->stype) {
         case ST_FUNCTION:
+            MEMfree(s->as.fun.label_name);
             MEMfree(s->as.fun.param_types);
             MEMfree(s->as.fun.param_dim_counts);
             if (!s->imported) STfree(&s->as.fun.scope);

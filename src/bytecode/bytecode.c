@@ -50,6 +50,14 @@ char** generate_vt_strs(const ValueType* vts, const size_t len) {
 static FunExportEntry find_fun_export(char* name) {
     const FunExportEntry res = ASMfindFunExport(&ASM, name);
 #ifdef DEBUGGING
+    ASSERT_MSG((res.get != 0), "Result of retrieving known exported function yielded no results");
+#endif // DEBUGGING
+    return res;
+}
+
+static FunImportEntry find_fun_import(char* name) {
+    const FunImportEntry res = ASMfindFunImport(&ASM, name);
+#ifdef DEBUGGING
     ASSERT_MSG((res.get != 0), "Result of retrieving known imported function yielded no results");
 #endif // DEBUGGING
     return res;
@@ -62,10 +70,11 @@ static FunExportEntry find_fun_export(char* name) {
  * @return unique name
  */
 char* generate_unique_fun_name(const Symbol* s) {
-    // Don't generate name for exported function
-    if (s->exported) return s->name;
-
     char* name = STRcpy(s->name);
+
+    // Don't generate name for exported function
+    if (s->exported) return name;
+
     while (s->parent_scope->parent_fun != NULL) {
         s = s->parent_scope->parent_fun;
         name = safe_concat_str(s->name, name);
@@ -288,14 +297,14 @@ node_st *BCfuncall(node_st *node)
     TRAVchildren(node);
 
     if (s->imported) {
-        const size_t offset = find_fun_export(name).offset;
+        const size_t offset = find_fun_import(name).offset;
         char* offset_str = int_to_str((int) offset);
         Instr("jsre", offset_str, NULL, NULL);
         MEMfree(offset_str);
     } else {
-        char* param_count_str = int_to_str((int) s->as.fun.param_count);
-        Instr("jsr", param_count_str, NULL, NULL);
-        MEMfree(param_count_str);
+        char* var_count_str = int_to_str((int) s->as.fun.scope->localvar_offset_counter);
+        Instr("jsr", var_count_str, s->as.fun.label_name, NULL);
+        MEMfree(var_count_str);
     }
 
     HAD_EXPR = true;
@@ -463,6 +472,17 @@ node_st *BCfundef(node_st *node)
             generate_vt_strs(fun_data->param_types, fun_data->param_count));
     }
 
+    // Save function to import list if import
+    else if (fun_symbol->imported) {
+        ASMemitFunImport(
+            &ASM,
+            name,
+            vt_to_str(fun_symbol->vtype),
+            fun_data->param_count,
+            generate_vt_strs(fun_data->param_types, fun_data->param_count));
+    }
+
+    // Switch scopes and traverse if not external function
     if (!fun_symbol->imported) {
         // Switch scope
         SymbolTable* prev_scope = CURRENT_SCOPE;
@@ -491,7 +511,10 @@ node_st *BCfunbody(node_st *node)
 {
     TRAVlocal_fundefs(node);
 
-    Label(generate_unique_fun_name(CURRENT_SCOPE->parent_fun), true);
+    char* label_name = generate_unique_fun_name(CURRENT_SCOPE->parent_fun);
+    CURRENT_SCOPE->parent_fun->as.fun.label_name = STRcpy(label_name);
+    Label(label_name, true);
+    MEMfree(label_name);
 
     // Only write "esr" if at least one variable will be initialised
     if (CURRENT_SCOPE->localvar_offset_counter > 0) {

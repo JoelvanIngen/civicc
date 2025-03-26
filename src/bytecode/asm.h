@@ -89,6 +89,11 @@ typedef struct FunExportEntry {
     FunExport* get;
 } FunExportEntry;
 
+typedef struct FunImportEntry {
+    size_t offset;
+    FunImport* get;
+} FunImportEntry;
+
 void ASMinit(Assembly* assembly);
 void ASMfree(Assembly** assembly_ptr);
 
@@ -103,3 +108,4 @@ void ASMemitVarImport(Assembly* assembly, char* name, char* type);
 
 ConstEntry ASMfindConstant(const Assembly* assembly, const char* value);
 FunExportEntry ASMfindFunExport(const Assembly* assembly, const char* name);
+FunImportEntry ASMfindFunImport(const Assembly* assembly, const char* name);

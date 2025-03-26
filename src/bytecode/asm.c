@@ -295,3 +295,19 @@ FunExportEntry ASMfindFunExport(const Assembly* assembly, const char* name) {
     // Not found
     return (FunExportEntry){0, NULL};
 }
+
+FunImportEntry ASMfindFunImport(const Assembly* assembly, const char* name) {
+    size_t idx = 0;
+    FunImport* import = assembly->fun_imports;
+    while (import != NULL) {
+        if (strcmp(import->name, name) == 0) {
+            return (FunImportEntry){idx, import};
+        }
+
+        import = import->next;
+        idx++;
+    }
+
+    // Not found
+    return (FunImportEntry){0, NULL};
+}

@@ -49,10 +49,9 @@ static void write_single_fun_export(FILE* f, const FunExport* export) {
 
     fprintf(f, " %s", export->ret_type);
 
-    // TODO: Find out if we need to print argument types
-    // for (size_t i = 0; i < export->arg_amount; i++) {
-    //     fprintf(f, " %s", export->args[i]);
-    // }
+    for (size_t i = 0; i < export->arg_amount; i++) {
+        fprintf(f, " %s", export->args[i]);
+    }
 
     fprintf(f, " %s", export->name);
 }
@@ -92,10 +91,9 @@ static void write_globvars(FILE* f, const GlobVar* globvar) {
 static void write_single_fun_import(FILE* f, const FunImport* import) {
     fprintf(f, ".importfun \"%s\" %s", import->name, import->ret_type);
 
-    // TODO: Find out if we need to print argument types
-    // for (size_t i = 0; i < import->arg_amount; i++) {
-    //     fprintf(f, " %s", import->args[i]);
-    // }
+    for (size_t i = 0; i < import->arg_amount; i++) {
+        fprintf(f, " %s", import->args[i]);
+    }
 }
 
 static void write_fun_imports(FILE* f, const FunImport* import) {

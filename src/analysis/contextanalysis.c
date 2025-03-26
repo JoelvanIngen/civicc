@@ -447,20 +447,29 @@ node_st *CTAfundef(node_st *node)
     const ValueType ret_type = ct_to_vt(FUNDEF_TYPE(node), false);
 
     if (PASS == DECLARATION_PASS) {
-        /* First pass: only return information about self */
-        const bool is_extern = FUNDEF_IS_EXTERN(node);
+        /* First pass: only find information about self */
+        const bool is_import = FUNDEF_IS_EXTERN(node);
+        const bool is_export = FUNDEF_EXPORT(node);
 
         const size_t param_count = count_params(FUNDEF_PARAMS(node));
-        Symbol* s = SBfromFun(fun_name, ret_type, param_count, is_extern);
+        Symbol* s = SBfromFun(fun_name, ret_type, param_count, is_import);
 
         // Find parameter types
         find_param_types(FUNDEF_PARAMS(node), s, s->as.fun.param_count);
 
-        if (!is_extern) {
-            s->as.fun.scope = STnew(CURRENT_SCOPE, s);
+        if (is_import) {
+            // Add to import table
+            s->imported = true;
+            s->offset = FUN_IMPORT_OFFSET++;
         } else {
-            s->offset = FUN_IMPORT_OFFSET;
-            FUN_IMPORT_OFFSET++;
+            // Create scope for function
+            s->as.fun.scope = STnew(CURRENT_SCOPE, s);
+
+            if (is_export) {
+                // Add to export table
+                s->exported = true;
+                s->offset = FUN_EXPORT_OFFSET++;
+            }
         }
 
         STinsert(CURRENT_SCOPE, fun_name, s);
