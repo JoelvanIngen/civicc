@@ -290,7 +290,7 @@ node_st *BCfuncall(node_st *node)
         MEMfree(delta_level);
     }
 
-    TRAVexprs(node);
+    TRAVchildren(node);
 
     if (s->imported) {
         const size_t offset = find_fun_export(name).offset;
