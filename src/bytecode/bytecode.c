@@ -39,18 +39,6 @@ void Label(char* label, bool is_fun) {
     ASMemitLabel(&ASM, label, is_fun);
 }
 
-char* float_to_str(const float f) {
-    char* buf = MEMmalloc(MAX_STR_LEN);
-    snprintf(buf, MAX_STR_LEN, "%f", f);
-    return buf;
-}
-
-char* int_to_str(const int i) {
-    char* buf = MEMmalloc(MAX_STR_LEN);
-    snprintf(buf, MAX_STR_LEN, "%i", i);
-    return buf;
-}
-
 char** generate_vt_strs(const ValueType* vts, const size_t len) {
     char** strs = MEMmalloc(len * sizeof(char*));
     for (size_t i = 0; i < len; i++) {
@@ -381,6 +369,9 @@ node_st *BCfundef(node_st *node)
 
         TRAVchildren(node);
 
+        // Reset loop counter
+        CURRENT_SCOPE->for_loop_counter = 0;
+
         // Revert scope
         CURRENT_SCOPE = prev_scope;
     }
@@ -526,11 +517,35 @@ node_st *BCdowhile(node_st *node)
  */
 node_st *BCfor(node_st *node)
 {
+    // TODO: For-loop variables will have wrong offset since they are in a separate scope
+    // TODO continuation: Adjust parent offset counter and for-loop variable offset to
+    // TODO continuation: compensate
+
+    // Switch to loop scope
+    const char* name = FOR_VAR(node);
+    char* adjusted_name = safe_concat_str(
+        int_to_str((int) CURRENT_SCOPE->for_loop_counter),
+        safe_concat_str(STRcpy("_"), STRcpy(name)));
+    const Symbol* s_loop = STlookup(CURRENT_SCOPE, adjusted_name);
+    CURRENT_SCOPE = s_loop->as.forloop.scope;
+
+    // Generate bytecode
     char* for_loop_start_name = generate_label_name(STRcpy("for_loop_start"));
     char* for_loop_end_name = generate_label_name(STRcpy("for_loop_end"));
 
     // TODO: Find incremented variable + increment
 
+    // Special case: restore loop counter to zero for next traversal
+    CURRENT_SCOPE->for_loop_counter = 0;
+
+    // Restore scope
+    CURRENT_SCOPE = CURRENT_SCOPE->parent_scope;
+
+    // Increment loop counter for next for-loop
+    CURRENT_SCOPE->for_loop_counter++;
+
+    // Clean up
+    MEMfree(adjusted_name);
     MEMfree(for_loop_start_name);
     MEMfree(for_loop_end_name);
 

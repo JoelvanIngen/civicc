@@ -9,6 +9,7 @@ typedef enum {
     ST_VALUEVAR,
     ST_ARRAYVAR,
     ST_FUNCTION,
+    ST_FORLOOP,
 } SymbolType;
 
 typedef enum ValueType {

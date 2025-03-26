@@ -73,6 +73,18 @@ char* mo_to_str(const enum MonOpType op) {
     }
 }
 
+char* float_to_str(const float f) {
+    char* buf = MEMmalloc(MAX_STR_LEN);
+    snprintf(buf, MAX_STR_LEN, "%f", f);
+    return buf;
+}
+
+char* int_to_str(const int i) {
+    char* buf = MEMmalloc(MAX_STR_LEN);
+    snprintf(buf, MAX_STR_LEN, "%i", i);
+    return buf;
+}
+
 /**
  * Concatenates two strings and frees them
  * @param s1 first string

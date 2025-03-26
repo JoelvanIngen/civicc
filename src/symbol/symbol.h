@@ -21,6 +21,10 @@ typedef struct {
 } FunData;
 
 typedef struct {
+    struct SymbolTable* scope;          // Create own scope for for-loops
+} ForloopData;
+
+typedef struct {
     SymbolType stype;
     ValueType vtype;
     char* name;
@@ -31,12 +35,14 @@ typedef struct {
     union {
         ArrayData array;
         FunData fun;
+        ForloopData forloop;
     } as;
 } Symbol;
 
 Symbol* SBfromFun(char* name, ValueType vt, bool imported);
 Symbol* SBfromArray(char* name, ValueType vt, bool imported);
 Symbol* SBfromVar(char* name, ValueType vt, bool imported);
+Symbol* SBfromForLoop(char* adjusted_name);
 void SBfree(Symbol** s_ptr);
 void SBaddDim(Symbol* s, size_t dim);
 void SBaddParam(Symbol* s, ValueType vt, size_t dim_count);

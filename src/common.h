@@ -50,4 +50,6 @@ char* vt_to_str(ValueType vt);
 ValueType ct_to_vt(enum Type ct_type, bool is_array);
 char* bo_to_str(enum BinOpType op);
 char* mo_to_str(enum MonOpType op);
+char* float_to_str(float f);
+char* int_to_str(int i);
 char* safe_concat_str(char* s1, char* s2);

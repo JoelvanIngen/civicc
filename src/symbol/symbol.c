@@ -66,6 +66,12 @@ Symbol* SBfromVar(char* name, const ValueType vt, const bool imported) {
     return s;
 }
 
+Symbol* SBfromForLoop(char* adjusted_name) {
+    Symbol* s = SBnew(adjusted_name, VT_NULL, false);
+    s->stype = ST_FORLOOP;
+    return s;
+}
+
 /* Free symbol struct for function or array. Vars don't need
  * their struct members free. See SBfromVar.abort
  *
@@ -85,6 +91,8 @@ void SBfree(Symbol** s_ptr) {
             break;
         case ST_ARRAYVAR:
             MEMfree(s->as.array.dims); break;
+        case ST_FORLOOP:
+            STfree(&s->as.forloop.scope); break;
         default: break;
     }
 

@@ -48,9 +48,6 @@ static IdList* IDL = NULL;
 // Keeps track of whether we had an error during analysis
 static bool HAD_ERROR = false;
 
-// Name used as for-loop variable
-static char* FOR_LOOP_NAME = NULL;
-
 #define IS_ARITH_TYPE(vt) (vt == VT_NUM || vt == VT_FLOAT)
 #define IS_ARRAY(vt) (vt == VT_NUMARRAY || vt == VT_FLOATARRAY || vt == VT_BOOLARRAY)
 
@@ -408,6 +405,9 @@ node_st *CTAfundef(node_st *node)
             // Explore function body
             TRAVbody(node);
 
+            // Reset loop counter
+            CURRENT_SCOPE->for_loop_counter = 0;
+
             // Switch back to parent scope
             CURRENT_SCOPE = CURRENT_SCOPE->parent_scope;
         }
@@ -465,19 +465,36 @@ node_st *CTAdowhile(node_st *node)
  */
 node_st *CTAfor(node_st *node)
 {
-    // Prepend all instances with an underscore to prevent name collision
-
     char* name = FOR_VAR(node);
+    char* adjusted_name = safe_concat_str(
+        int_to_str((int) CURRENT_SCOPE->for_loop_counter),
+        safe_concat_str(STRcpy("_"), STRcpy(name)));
 
-    FOR_LOOP_NAME = STRcpy(name);
+    // Create for-loop entry in current scope
+    Symbol* s_loop = SBfromForLoop(adjusted_name);
+    STinsert(CURRENT_SCOPE, adjusted_name, s_loop);
 
-    Symbol* s = SBfromVar(name, VT_NUM, false);
-    STinsert(CURRENT_SCOPE, name, s);
+    // Create for-loop scope and switch to it
+    s_loop->as.forloop.scope = STnew(CURRENT_SCOPE, s_loop);
+    CURRENT_SCOPE = s_loop->as.forloop.scope;
+
+    // Create loop variable in new scope
+    Symbol* s_var = SBfromVar(name, VT_NUM, false);
+    STinsert(CURRENT_SCOPE, name, s_var);
 
     TRAVchildren(node);
 
-    free(FOR_LOOP_NAME);
-    FOR_LOOP_NAME = NULL;
+    // Special case: restore loop counter to zero for next traversal (during bytecode)
+    CURRENT_SCOPE->for_loop_counter = 0;
+
+    // Restore scope
+    CURRENT_SCOPE = CURRENT_SCOPE->parent_scope;
+
+    // Increment loop counter for next for-loop
+    CURRENT_SCOPE->for_loop_counter++;
+
+    // Clean up
+    MEMfree(adjusted_name);
 
     return node;
 }
@@ -814,11 +831,6 @@ node_st *CTAvarlet(node_st *node)
 
     char* name = VARLET_NAME(node);
 
-    // Rename if used as for loop variable
-    if (FOR_LOOP_NAME == name) {
-        VARLET_NAME(node) = safe_concat_str(STRcpy("_"), name);
-    }
-
     // Look up variable
     const Symbol* s = ScopeTreeFind(CURRENT_SCOPE, name);
 
@@ -861,11 +873,6 @@ node_st *CTAvar(node_st *node)
     // Note: Requires array support
 
     char* name = VAR_NAME(node);
-
-    // Rename if used as for loop variable
-    if (FOR_LOOP_NAME == name) {
-        VAR_NAME(node) = safe_concat_str(STRcpy("_"), name);
-    }
 
     // Look up variable
     const Symbol* s = ScopeTreeFind(CURRENT_SCOPE, name);
