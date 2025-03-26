@@ -290,19 +290,32 @@ dowhilestmt: DO BRACE_L stmts[block] BRACE_R WHILE BRACKET_L expr[cond] BRACKET_
           ;
 
 forstmt: FOR BRACKET_L INTTYPE ID[var] LET expr[init] COMMA expr[stop] COMMA expr[step] BRACKET_R BRACE_L stmts[block] BRACE_R
-           {
-             $$ = ASTfor($init, $stop);
-             FOR_STEP($$) = $step;
-             FOR_BLOCK($$) = $block;
-             FOR_VAR($$) = $var;
-           }
-         | FOR BRACKET_L INTTYPE ID[var] LET expr[init] COMMA expr[stop] BRACKET_R BRACE_L stmts[block] BRACE_R
-           {
-             $$ = ASTfor($init, $stop);
-             FOR_BLOCK($$) = $block;
-             FOR_VAR($$) = $var;
-           }
-         ;
+        {
+          $$ = ASTfor($init, $stop);
+          FOR_STEP($$) = $step;
+          FOR_BLOCK($$) = $block;
+          FOR_VAR($$) = $var;
+        }
+       | FOR BRACKET_L INTTYPE ID[var] LET expr[init] COMMA expr[stop] BRACKET_R BRACE_L stmts[block] BRACE_R
+        {
+          $$ = ASTfor($init, $stop);
+          FOR_BLOCK($$) = $block;
+          FOR_VAR($$) = $var;
+        }
+       | FOR BRACKET_L INTTYPE ID[var] LET expr[init] COMMA expr[stop] COMMA expr[step] BRACKET_R stmt[block]
+        {
+          $$ = ASTfor($init, $stop);
+          FOR_STEP($$) = $step;
+          FOR_BLOCK($$) = ASTstmts($block, NULL);
+          FOR_VAR($$) = $var;
+        }
+       | FOR BRACKET_L INTTYPE ID[var] LET expr[init] COMMA expr[stop] BRACKET_R stmt[block]
+        {
+          $$ = ASTfor($init, $stop);
+          FOR_BLOCK($$) = ASTstmts($block, NULL);
+          FOR_VAR($$) = $var;
+        }
+        ;
 
 returnstmt: RETURN expr[val] SEMICOLON
             {
