@@ -220,7 +220,7 @@ node_st *BCexprstmt(node_st *node)
         case VT_VOID: break;  // Special case: void function does not return anything to needs be popped
         default:  // Should never occur
 #ifdef DEBUGGING
-            ERROR("Unexpected exprstmt type %i", LAST_TYPE);
+            ERROR("Unexpected exprstmt type %s", vt_to_str(LAST_TYPE));
 #endif // DEBUGGING
     }
 
@@ -299,11 +299,12 @@ node_st *BCfuncall(node_st *node)
         MEMfree(offset_str);
     } else {
         char* param_count_str = int_to_str((int) s->as.fun.param_count);
-        Instr("jsr", int_to_str((int) s->as.fun.param_count), NULL, NULL);
+        Instr("jsr", param_count_str, NULL, NULL);
         MEMfree(param_count_str);
     }
 
     HAD_EXPR = true;
+    LAST_TYPE = s->vtype;
 
     /**
      * For each argument:
