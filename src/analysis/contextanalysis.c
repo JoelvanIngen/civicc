@@ -820,7 +820,7 @@ node_st *CTAvarlet(node_st *node)
     }
 
     // Look up variable
-    const Symbol* s = STlookup(CURRENT_SCOPE, name);
+    const Symbol* s = ScopeTreeFind(CURRENT_SCOPE, name);
 
     // Handle case of missing symbol
     HANDLE_MISSING_SYMBOL(name, s);
@@ -868,7 +868,7 @@ node_st *CTAvar(node_st *node)
     }
 
     // Look up variable
-    const Symbol* s = STlookup(CURRENT_SCOPE, name);
+    const Symbol* s = ScopeTreeFind(CURRENT_SCOPE, name);
 
     // Handle case of missing symbol
     HANDLE_MISSING_SYMBOL(name, s);
