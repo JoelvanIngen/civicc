@@ -263,6 +263,7 @@ node_st *CTAreturn(node_st *node)
     // Check validity of return expression
     const ValueType parent_fun_type = CURRENT_SCOPE->parent_fun->vtype;
     if (ret_type != parent_fun_type) {
+        HAD_ERROR = true;
         USER_ERROR("Trying to return %s from function with type %s",
             vt_to_str(ret_type), vt_to_str(parent_fun_type));
     }
@@ -307,6 +308,7 @@ node_st *CTAfuncall(node_st *node)
 
     // Error if more arguments provided than parameters expected
     if (args_len > params_len) {
+        HAD_ERROR = true;
         USER_ERROR("Too many arguments; got %lu but function %s only expects %lu",
             args_len, FUNCALL_NAME(node), params_len);
         return node;
@@ -314,6 +316,7 @@ node_st *CTAfuncall(node_st *node)
 
     // Error if more parameters expected than arguments provided
     if (args_len < params_len) {
+        HAD_ERROR = true;
         USER_ERROR("Not enough arguments; got %lu but function %s expects %lu",
             args_len, FUNCALL_NAME(node), params_len);
         return node;
@@ -324,6 +327,7 @@ node_st *CTAfuncall(node_st *node)
         const Argument* arg = args[i];
         // Error if not similar type
         if (arg->type != param_types[i]) {
+            HAD_ERROR = true;
             USER_ERROR("Argument type %s and parameter type %s don't match",
                 vt_to_str(arg->type), vt_to_str(param_types[i]));
             return node;
@@ -332,6 +336,7 @@ node_st *CTAfuncall(node_st *node)
         if (IS_ARRAY(arg->type)) {
             // Compare argument dimensions vs expected parameter dimensions
             if (arg->arr_dim_count != param_dim_counts[i]) {
+                HAD_ERROR = true;
                 USER_ERROR("Argument has %lu dimensions, but function parameter expects %lu",
                     arg->arr_dim_count, param_dim_counts[i]);
             }
@@ -353,6 +358,7 @@ node_st *CTAcast(node_st *node)
 {
     TRAVchildren(node);
     if (!(LAST_TYPE == VT_NUM || LAST_TYPE == VT_FLOAT || LAST_TYPE == VT_BOOL)) {
+        HAD_ERROR = true;
         USER_ERROR("Invalid cast source, can only cast from Num, Float or Bool but got %s",
             vt_to_str(LAST_TYPE));
     }
@@ -579,6 +585,7 @@ node_st *CTAglobdef(node_st *node)
     // TODO: Check if types implicitly cast
     // We can use last_type because globdef always has an init child
     if (ct_to_vt(GLOBDEF_TYPE(node), is_array) != LAST_TYPE) {
+        HAD_ERROR = true;
         USER_ERROR("Variable of type %s was initialised with expression of type %s",
             vt_to_str(ct_to_vt(GLOBDEF_TYPE(node), is_array)),
             vt_to_str(LAST_TYPE));
@@ -673,6 +680,7 @@ node_st *CTAvardecl(node_st *node)
         // TODO: Allow scalar to init array
         // TODO: Find out if types implicitly cast
         if (s->vtype != LAST_TYPE) {
+            HAD_ERROR = true;
             USER_ERROR("Tried to initialise variable %s with %s",
                 vt_to_str(s->vtype), vt_to_str(LAST_TYPE));
         }
@@ -723,6 +731,7 @@ node_st *CTAassign(node_st *node)
     }
 
     else {
+        HAD_ERROR = true;
         USER_ERROR("Operands not compatible: %s and %s",
             vt_to_str(let_type), vt_to_str(expr_type));
     }
@@ -761,6 +770,7 @@ node_st *CTAbinop(node_st *node)
     }
 
     else {
+        HAD_ERROR = true;
         USER_ERROR("Operands not compatible: %s and %s",
             vt_to_str(left_type), vt_to_str(right_type));
     }
@@ -770,6 +780,7 @@ node_st *CTAbinop(node_st *node)
     if (left_is_arith) {
         if (!(t == BO_add || t == BO_sub || t == BO_mul || t == BO_div || t == BO_mod ||
               t == BO_eq || t == BO_ne || t == BO_lt || t == BO_le || t == BO_gt || t == BO_ge)) {
+            HAD_ERROR = true;
             USER_ERROR("Invalid operands %s and %s for operator %s",
                 vt_to_str(left_type), vt_to_str(right_type), bo_to_str(t));
         }
@@ -781,6 +792,7 @@ node_st *CTAbinop(node_st *node)
     } else if (left_type == VT_BOOL) {
         // BO_add and BO_mul are strict logic disjunction and conjunction, respectively
         if (!(t == BO_add || t == BO_mul || t == BO_eq || t == BO_ne || t == BO_and || t == BO_or)) {
+            HAD_ERROR = true;
             USER_ERROR("Invalid operands %s and %s for operator %s",
                 vt_to_str(left_type), vt_to_str(right_type), bo_to_str(t));
         }
@@ -806,14 +818,17 @@ node_st *CTAmonop(node_st *node)
         // TODO: Find out if negated bool switches values (probably not)
         case MO_neg:
             if (!(LAST_TYPE == VT_NUM || LAST_TYPE == VT_FLOAT)) {
+                HAD_ERROR = true;
                 USER_ERROR("Expected operand type Int or Float, got %s instead", vt_to_str(LAST_TYPE));
             }
             break;
         case MO_not: if (LAST_TYPE != VT_BOOL) {
+                HAD_ERROR = true;
                 USER_ERROR("Expected operand type Bool, got %s instead", vt_to_str(LAST_TYPE));
             }
             break;
         default: /* Should never occur */
+            HAD_ERROR = true;
             USER_ERROR("Unknown monop %s with operand %s", mo_to_str(MONOP_OP(node)), vt_to_str(LAST_TYPE));
     }
 
@@ -846,11 +861,13 @@ node_st *CTAvarlet(node_st *node)
     if (is_array) {
         // Ensure symbol is array
         if (!IS_ARRAY(s->vtype)) {
+            HAD_ERROR = true;
             USER_ERROR("Identifier %s was indexed, but is not an array", name);
         }
 
         // Confirm dimensions are correct
         if (s->as.array.dim_count != dml->size) {
+            HAD_ERROR = true;
             USER_ERROR("Expected array dimension count is %lu but got %lu", s->as.array.dim_count, dml->size);
         }
 
@@ -889,11 +906,13 @@ node_st *CTAvar(node_st *node)
     if (is_array) {
         // Ensure symbol is array
         if (!IS_ARRAY(s->vtype)) {
+            HAD_ERROR = true;
             USER_ERROR("Identifier %s was indexed, but is not an array", name);
         }
 
         // Confirm dimensions are correct
         if (s->as.array.dim_count != dml->size) {
+            HAD_ERROR = true;
             USER_ERROR("Expected array dimension count is %lu but got %lu", s->as.array.dim_count, dml->size);
         }
 
