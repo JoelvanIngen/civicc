@@ -264,7 +264,7 @@ whilestmt: WHILE BRACKET_L expr[cond] BRACKET_R BRACE_L stmts[block] BRACE_R
             }
           ;
 
-dowhilestmt: DO BRACE_L stmts[block] BRACE_R WHILE BRACKET_L expr[cond] BRACKET_R
+dowhilestmt: DO BRACE_L stmts[block] BRACE_R WHILE BRACKET_L expr[cond] BRACKET_R SEMICOLON
             {
               $$ = ASTdowhile($cond);
               DOWHILE_BLOCK($$) = $block;
