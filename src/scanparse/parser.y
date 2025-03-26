@@ -123,6 +123,17 @@ globdef: opt_export_bool[export] type[t] ID[name] LET expr[init] SEMICOLON
           GLOBDEF_EXPORT($$) = $export;
           AddLocToNode($$, &@t, &@init);
         }
+       | opt_export_bool[export] type[t] ID[name] SEMICOLON
+        {
+          $$ = ASTglobdef($name, $t);
+          GLOBDEF_EXPORT($$) = $export;
+        }
+       | opt_export_bool[export] type[t] SBRACKET_L exprs[dims] SBRACKET_R ID[name] SEMICOLON
+        {
+          $$ = ASTglobdef($name, $t);
+          GLOBDEF_EXPORT($$) = $export;
+          GLOBDEF_DIMS($$) = $dims;
+        }
         ;
 
 opt_export_bool: EXPORT { $$ = true; }
