@@ -34,7 +34,7 @@ node_st* reverse_vardecls(node_st* head);
 %locations
 
 %token BRACE_L BRACE_R BRACKET_L BRACKET_R SBRACKET_L SBRACKET_R COMMA SEMICOLON
-%token IF ELSE WHILE DO FOR RETURN
+%token IF THEN ELSE WHILE DO FOR RETURN
 %token MINUS PLUS STAR SLASH PERCENT LE LT GE GT EQ NE OR AND
 %token NOT UMINUS CAST
 %token TRUEVAL FALSEVAL LET
@@ -55,9 +55,12 @@ node_st* reverse_vardecls(node_st* head);
 %right NOT CAST
 %nonassoc UMINUS
 
+%nonassoc THEN
+%nonassoc ELSE // To prevent warnings for dangling else
+
 %type <node> program decls expr exprs ids exprstmt
 %type <node> returnstmt funcall fundef funbody
-%type <node> ifstmt whilestmt dowhilestmt forstmt
+%type <node> ifstmt whilestmt dowhilestmt forstmt ifstmtblock
 %type <node> globdecl globdef param vardecl stmts
 %type <node> assign varlet var
 %type <node> intval floatval boolval
@@ -241,21 +244,31 @@ assign: varlet LET expr SEMICOLON
 
 exprstmt: expr SEMICOLON { $$ = ASTexprstmt($1); };
 
-ifstmt: IF BRACKET_L expr[cond] BRACKET_R BRACE_L stmts[thenblock] BRACE_R ELSE BRACE_L stmts[elseblock] BRACE_R
+ifstmt: IF BRACKET_L expr[cond] BRACKET_R ifstmtblock[thenblock] %prec THEN
+        {
+          $$ = ASTifelse($cond);
+          IFELSE_THEN($$) = $thenblock;
+          AddLocToNode($$, &@1, &@thenblock);
+        }
+      | IF BRACKET_L expr[cond] BRACKET_R ifstmtblock[thenblock] ELSE ifstmtblock[elseblock] %prec ELSE
         {
           $$ = ASTifelse($cond);
           IFELSE_THEN($$) = $thenblock;
           IFELSE_ELSE_BLOCK($$) = $elseblock;
           AddLocToNode($$, &@1, &@elseblock);
         }
-      | IF BRACKET_L expr[cond] BRACKET_R BRACE_L stmts[thenblock] BRACE_R
-        {
-          $$ = ASTifelse($cond);
-          IFELSE_THEN($$) = $thenblock;
-          AddLocToNode($$, &@1, &@thenblock);
-        }
         ;
 
+ifstmtblock: BRACE_L stmts[block] BRACE_R
+             {
+               $$ = $block;
+             }
+          | stmt[single_stmt]
+             {
+               $$ = ASTstmts($single_stmt, NULL);
+             }
+            ;
+              
 whilestmt: WHILE BRACKET_L expr[cond] BRACKET_R BRACE_L stmts[block] BRACE_R
             {
               $$ = ASTwhile($cond);
