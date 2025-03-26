@@ -151,6 +151,7 @@ node_st *PRTfundef(node_st *node)
 {
     const bool has_body = FUNDEF_BODY(node) != NULL;
 
+    printf("\n");
     print_indent();
 
     if (has_body) printf("BEGIN ");
@@ -162,6 +163,7 @@ node_st *PRTfundef(node_st *node)
     if (FUNDEF_PARAMS(node) != NULL) {
         printf(", params=(");
         TRAVparams(node);
+        printf(")");
     }
 
     printf(")");
