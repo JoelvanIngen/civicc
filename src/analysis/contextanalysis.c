@@ -583,8 +583,7 @@ node_st *CTAglobdef(node_st *node)
     TRAVinit(node);
 
     // TODO: Check if types implicitly cast
-    // We can use last_type because globdef always has an init child
-    if (ct_to_vt(GLOBDEF_TYPE(node), is_array) != LAST_TYPE) {
+    if (GLOBDEF_INIT(node) != NULL && ct_to_vt(GLOBDEF_TYPE(node), is_array) != LAST_TYPE) {
         HAD_ERROR = true;
         USER_ERROR("Variable of type %s was initialised with expression of type %s",
             vt_to_str(ct_to_vt(GLOBDEF_TYPE(node), is_array)),
