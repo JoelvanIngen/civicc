@@ -99,7 +99,7 @@ decl: globdecl { $$ = $1; }
     | fundef { $$ = $1; }
     ;
 
-globdecl: EXTERN type[t] ids[dims] ID[name] SEMICOLON
+globdecl: EXTERN type[t] SBRACKET_L ids[dims] SBRACKET_R ID[name] SEMICOLON
           {
             $$ = ASTglobdecl($name, $t);
             GLOBDECL_DIMS($$) = $dims;
@@ -223,7 +223,7 @@ funbody: BRACE_L[startbrace] vardecls[decls] localfundefs[fundefs] stmts[sts] BR
           }
           ;
 
-param: type[t] ID[id] SBRACKET_L ids[dims] SBRACKET_R
+param: type[t] SBRACKET_L ids[dims] SBRACKET_R ID[id]
       {
         $$ = ASTparam($id, $t);
         PARAM_DIMS($$) = $dims;
