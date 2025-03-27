@@ -163,6 +163,13 @@ node_st *BCprogram(node_st *node)
 
     TRAVchildren(node);
 
+    // If we created an init function and did not close it yet, and don't have a funbody anywhere,
+    // we should close now
+    if (GB_REQUIRES_INIT_FUNCTION && !HAD_INIT_RETURN) {
+        HAD_INIT_RETURN = true;
+        Instr("return", NULL, NULL, NULL);
+    }
+
     // Write collected ASM to file
     fini();
 
@@ -795,6 +802,14 @@ node_st *BCfor(node_st *node)
  */
 node_st *BCglobdecl(node_st *node)
 {
+    // Add to import list
+    char* name = GLOBDECL_NAME(node);
+    const Symbol* var_symbol = ScopeTreeFind(CURRENT_SCOPE, name);
+    ASMemitVarImport(
+        &ASM,
+        name,
+        vt_to_str(var_symbol->vtype));
+
     TRAVchildren(node);
 
     /**
@@ -817,6 +832,13 @@ node_st *BCglobdef(node_st *node)
     ASMemitGlobVar(
         &ASM,
         vt_to_str(s->vtype));
+
+    if (GLOBDEF_EXPORT(node)) {
+        ASMemitVarExport(
+            &ASM,
+            s->name,
+            s->offset);
+    }
 
     if (GLOBDEF_INIT(node) != NULL) {
         TRAVinit(node);
