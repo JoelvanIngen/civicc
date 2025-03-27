@@ -222,6 +222,9 @@ node_st *CTAprogram(node_st *node)
     // Exit here if an analysis error occurred
     exit_if_error();
 
+    // If there are globals, we need an __init function in the bytecode
+    GB_REQUIRES_INIT_FUNCTION = GLOBAL_VAR_OFFSET > 0;
+
     return node;
 }
 

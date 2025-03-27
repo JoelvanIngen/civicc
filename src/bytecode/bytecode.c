@@ -33,6 +33,9 @@ static bool HAD_EXPR = false;
 // Checks whether a return statement is issued (or if we need to implicitly add one in case of void)
 static bool HAD_RETURN = false;
 
+// Checks whether we returned from our init function
+static bool HAD_INIT_RETURN = false;
+
 // Shortcuts to prevent having to provide asm as argument every call
 void Instr(char* instr_name, char* arg0, char* arg1, char* arg2) {
     ASMemitInstr(&ASM, instr_name, arg0, arg1, arg2);
@@ -153,10 +156,16 @@ node_st *BCprogram(node_st *node)
 {
     init();
 
+    if (GB_REQUIRES_INIT_FUNCTION) {
+        Label("__init", true);
+        ASMemitFunExport(&ASM, "__init", "void", 0, NULL);
+    }
+
     TRAVchildren(node);
 
     // Write collected ASM to file
     fini();
+
     return node;
 }
 
@@ -488,6 +497,12 @@ node_st *BCfundef(node_st *node)
 
     // Switch scopes and traverse if not external function
     if (!fun_symbol->imported) {
+        // If we created an init function and did not close it yet, now is the time to do so
+        if (GB_REQUIRES_INIT_FUNCTION && !HAD_INIT_RETURN) {
+            HAD_INIT_RETURN = true;
+            Instr("return", NULL, NULL, NULL);
+        }
+
         // Switch scope
         SymbolTable* prev_scope = CURRENT_SCOPE;
         CURRENT_SCOPE = fun_symbol->as.fun.scope;
@@ -794,7 +809,36 @@ node_st *BCglobdecl(node_st *node)
  */
 node_st *BCglobdef(node_st *node)
 {
-    TRAVchildren(node);
+    char* name = GLOBDEF_NAME(node);
+    Symbol* s = STlookup(CURRENT_SCOPE, name);
+#ifdef DEBUGGING
+    ASSERT_MSG((s != NULL), "Bytecode: Couldn't find globdef symbol in scope");
+#endif // DEBUGGING
+    ASMemitGlobVar(
+        &ASM,
+        vt_to_str(s->vtype));
+
+    if (GLOBDEF_INIT(node) != NULL) {
+        TRAVinit(node);
+#ifdef DEBUGGING
+        ASSERT_MSG((LAST_TYPE == s->vtype), "Bytecode: Globdef type and init type are not the same");
+#endif // DEBUGGING
+
+        char* offset_str = int_to_str((int) s->offset);
+        switch (LAST_TYPE) {
+            case VT_NUM: Instr("istoreg", offset_str, NULL, NULL); break;
+            case VT_FLOAT: Instr("fstoreg", offset_str, NULL, NULL); break;
+            case VT_BOOL: Instr("bstoreg", offset_str, NULL, NULL); break;
+            default:
+#ifdef DEBUGGING
+                ERROR("Bytecode: Unexpected globdef type %s", vt_to_str(LAST_TYPE));
+#endif // DEBUGGING
+        }
+
+        MEMfree(offset_str);
+    }
+
+    TRAVdims(node);
 
     /**
      * Match whether it has an expression:

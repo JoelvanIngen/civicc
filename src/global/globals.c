@@ -5,6 +5,7 @@
 struct globals global;
 
 SymbolTable* GB_GLOBAL_SCOPE;
+bool GB_REQUIRES_INIT_FUNCTION;
 
 /*
  * Initialize global variables from globals.mac

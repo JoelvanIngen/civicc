@@ -12,6 +12,7 @@ struct globals {
 };
 
 extern struct SymbolTable* GB_GLOBAL_SCOPE;
+extern bool GB_REQUIRES_INIT_FUNCTION;
 
 extern struct globals global;
 extern void GLBinitializeGlobals(void);
