@@ -83,7 +83,7 @@ char* generate_unique_fun_name(const Symbol* s) {
 
     while (s->parent_scope->parent_fun != NULL) {
         s = s->parent_scope->parent_fun;
-        name = safe_concat_str(s->name, name);
+        name = safe_concat_str(STRcpy(s->name), name);
     }
 
     return safe_concat_str(STRcpy("_"), name);
