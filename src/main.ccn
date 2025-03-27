@@ -335,7 +335,8 @@ node Var {
     },
 
     attributes {
-        string name { constructor }
+        string name { constructor },
+        user symbol_ptr symbol
     }
 };
 

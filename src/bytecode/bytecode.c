@@ -1238,7 +1238,8 @@ node_st *BCvar(node_st *node)
 {
     TRAVchildren(node);
 
-    const Symbol* s = ScopeTreeFind(CURRENT_SCOPE, VAR_NAME(node));
+    // Retrieve var symbol from AST
+    const Symbol* s = VAR_SYMBOL(node);
 #ifdef DEBUGGING
     ASSERT_MSG((s != NULL), "BYTECODE: Could not find symbol named %s", VAR_NAME(node));
 #endif // DEBUGGING

@@ -1021,7 +1021,7 @@ node_st *CTAvar(node_st *node)
     char* name = VAR_NAME(node);
 
     // Look up variable
-    const Symbol* s = ScopeTreeFind(CURRENT_SCOPE, name);
+    Symbol* s = ScopeTreeFind(CURRENT_SCOPE, name);
 
     // Handle case of missing symbol
     HANDLE_MISSING_SYMBOL(name, s);
@@ -1052,6 +1052,9 @@ node_st *CTAvar(node_st *node)
 
     // Clean up
     DLSpop(DLS);
+
+    // Add symbol to AST
+    VAR_SYMBOL(node) = s;
 
     return node;
 }
