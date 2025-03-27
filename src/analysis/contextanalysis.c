@@ -393,8 +393,6 @@ node_st *CTAfuncall(node_st *node)
 
     // Iterate through all params and arguments pairs and compare properties
     for (size_t i = 0; i < params_len; i++) {
-        printf("PARAMS LEN %lu, ARGS_LEN %lu\n", params_len, args_len);
-        fflush(stdout);
         // Error if not similar type
         if (args[i].type != param_types[i]) {
             HAD_ERROR = true;
