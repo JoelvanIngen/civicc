@@ -49,6 +49,9 @@ static IdList* IDL = NULL;
 // Keeps track of whether we had an error during analysis
 static bool HAD_ERROR = false;
 
+// Keeps track of missing return statements
+static bool HAD_RETURN = false;
+
 static size_t GLOBAL_VAR_OFFSET = 0;
 static size_t FUN_IMPORT_OFFSET = 0;
 static size_t VAR_IMPORT_OFFSET = 0;
@@ -326,6 +329,8 @@ node_st *CTAreturn(node_st *node)
             vt_to_str(ret_type), vt_to_str(parent_fun_type));
     }
 
+    HAD_RETURN = true;
+
     return node;
 }
 
@@ -514,7 +519,13 @@ node_st *CTAfunbody(node_st *node)
     // Explore local functions and own statements now that we gathered all declarations
     PASS = ANALYSIS_PASS;
     TRAVlocal_fundefs(node);
+
+    HAD_RETURN = false;
     TRAVstmts(node);
+    if (CURRENT_SCOPE->parent_fun->vtype != VT_VOID && !HAD_RETURN) {
+        HAD_ERROR = true;
+        USER_ERROR("Missing return statement in function %s", CURRENT_SCOPE->parent_fun->name);
+    }
     return node;
 }
 

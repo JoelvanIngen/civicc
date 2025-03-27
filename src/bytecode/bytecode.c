@@ -30,6 +30,9 @@ static size_t NUMBERED_LABEL_COUNT = 0;
 static ValueType LAST_TYPE = VT_NULL;
 static bool HAD_EXPR = false;
 
+// Checks whether a return statement is issued (or if we need to implicitly add one in case of void)
+static bool HAD_RETURN = false;
+
 // Shortcuts to prevent having to provide asm as argument every call
 void Instr(char* instr_name, char* arg0, char* arg1, char* arg2) {
     ASMemitInstr(&ASM, instr_name, arg0, arg1, arg2);
@@ -251,6 +254,8 @@ node_st *BCreturn(node_st *node)
 #endif // DEBUGGING
     }
 
+    HAD_RETURN = true;
+
     /**
      * Emit return instruction (with correct type)
      */
@@ -285,7 +290,7 @@ node_st *BCfuncall(node_st *node)
         Instr("isr", NULL, NULL, NULL);
     } else {
 #ifdef DEBUGGING
-        ASSERT_MSG((current_level > fun_level + 1), "Calling function from scope depth %lu unreachable by own scope depth %lu",
+        ASSERT_MSG((current_level >= fun_level + 1), "Calling function from scope depth %lu unreachable by own scope depth %lu",
             fun_level, current_level);
 #endif // DEBUGGING
         char* delta_level = int_to_str((int) (current_level - fun_level));
@@ -510,13 +515,16 @@ node_st *BCfunbody(node_st *node)
 {
     TRAVlocal_fundefs(node);
 
+    HAD_RETURN = false;
     char* label_name = generate_unique_fun_name(CURRENT_SCOPE->parent_fun);
     CURRENT_SCOPE->parent_fun->as.fun.label_name = STRcpy(label_name);
     Label(label_name, true);
     MEMfree(label_name);
 
-    // Only write "esr" if at least one variable will be initialised
-    if (CURRENT_SCOPE->localvar_offset_counter > 0) {
+    // Only write "esr" if at least one variable (NOT PARAMETER) will be initialised
+    if (CURRENT_SCOPE->localvar_offset_counter
+        - CURRENT_SCOPE->parent_fun->as.fun.param_count > 0) {
+
         char* offset_str = int_to_str((int) CURRENT_SCOPE->localvar_offset_counter);
         Instr("esr", offset_str, NULL, NULL);
         MEMfree(offset_str);
@@ -524,6 +532,13 @@ node_st *BCfunbody(node_st *node)
 
     TRAVdecls(node);
     TRAVstmts(node);
+
+    // Add a void return if the code doesn't contain a return statement
+    if (CURRENT_SCOPE->parent_fun->vtype == VT_VOID) {
+        if (!HAD_RETURN) {
+            Instr("return", NULL, NULL, NULL);
+        }
+    }
 
     /**
      * Traverse nested functions (otherwise functions mix in bytecode)
