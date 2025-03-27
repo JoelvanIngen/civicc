@@ -786,6 +786,20 @@ node_st *CTAvardecl(node_st *node)
 
     const ValueType type = ct_to_vt(VARDECL_TYPE(node), is_array);
 
+    LAST_TYPE = VT_NULL;
+    TRAVinit(node);
+
+    if (LAST_TYPE != VT_NULL) {
+        // Compare types
+        // TODO: Allow scalar to init array
+        // TODO: Find out if types implicitly cast
+        if (type != LAST_TYPE) {
+            HAD_ERROR = true;
+            USER_ERROR("Tried to initialise variable %s with %s",
+                vt_to_str(type), vt_to_str(LAST_TYPE));
+        }
+    }
+
     // Create and add symbol to scope
     Symbol* s = SBfromVar(name, type, false);
     s->offset = CURRENT_SCOPE->localvar_offset_counter++;
@@ -799,21 +813,6 @@ node_st *CTAvardecl(node_st *node)
 
     // Clean up
     DLSpop(DLS);
-
-    LAST_TYPE = VT_NULL;
-    TRAVinit(node);
-
-    // Find out if an init existed
-    if (LAST_TYPE != VT_NULL) {
-        // Compare types
-        // TODO: Allow scalar to init array
-        // TODO: Find out if types implicitly cast
-        if (s->vtype != LAST_TYPE) {
-            HAD_ERROR = true;
-            USER_ERROR("Tried to initialise variable %s with %s",
-                vt_to_str(s->vtype), vt_to_str(LAST_TYPE));
-        }
-    }
 
     TRAVnext(node);
     return node;
