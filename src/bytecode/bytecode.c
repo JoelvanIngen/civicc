@@ -315,7 +315,7 @@ node_st *BCfuncall(node_st *node)
         Instr("jsre", offset_str, NULL, NULL);
         MEMfree(offset_str);
     } else {
-        char* var_count_str = int_to_str((int) s->as.fun.scope->localvar_offset_counter);
+        char* var_count_str = int_to_str((int) s->as.fun.param_count);
         Instr("jsr", var_count_str, s->as.fun.label_name, NULL);
         MEMfree(var_count_str);
     }
