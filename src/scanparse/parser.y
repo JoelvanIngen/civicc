@@ -166,7 +166,7 @@ opt_params: param_list { $$ = $1; }
           | %empty { $$ = NULL; };
 
 param_list: param { $$ = $1; }
-          | param_list COMMA param
+          | param COMMA param_list
             {
               $$ = $1;
               PARAM_NEXT($1) = $3;
