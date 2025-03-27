@@ -545,8 +545,6 @@ node_st *BCfunbody(node_st *node)
      * Emit function label
      * Emit "esr N" with N being the amount of variables we are going to use in function
      * Traverse decls and stmts
-     * !!! TODO: figure out a way to find the amount of variables used in function || Solved?
-     * !!! TODO: figure out if for-loop variables count for that purpose (would make everything a tad trickier)
      */
     return node;
 }
@@ -655,23 +653,88 @@ node_st *BCdowhile(node_st *node)
  */
 node_st *BCfor(node_st *node)
 {
-    // TODO: For-loop variables will have wrong offset since they are in a separate scope
-    // TODO continuation: Adjust parent offset counter and for-loop variable offset to
-    // TODO continuation: compensate
-
     // Switch to loop scope
-    const char* name = FOR_VAR(node);
+    char* name = FOR_VAR(node);
     char* adjusted_name = safe_concat_str(
         int_to_str((int) CURRENT_SCOPE->for_loop_counter),
         safe_concat_str(STRcpy("_"), STRcpy(name)));
     const Symbol* s_loop = STlookup(CURRENT_SCOPE, adjusted_name);
     CURRENT_SCOPE = s_loop->as.forloop.scope;
 
+    // Place correct values in all variables
+    TRAVstart_expr(node);
+#ifdef DEBUGGING
+    ASSERT_MSG((LAST_TYPE == VT_NUM), "Got a non-integer value for loop start expression");
+#endif // DEBUGGING
+    Symbol* s_counter = STlookup(CURRENT_SCOPE, name);
+    char* loop_offset_str = int_to_str((int) s_counter->offset);
+    Instr("istore", loop_offset_str, NULL, NULL);
+
+    TRAVstop(node);
+#ifdef DEBUGGING
+    ASSERT_MSG((LAST_TYPE == VT_NUM), "Got a non-integer value for loop stop condition");
+#endif // DEBUGGING
+    Symbol* s_cond = STlookup(CURRENT_SCOPE, "_cond");
+    char* cond_offset_str = int_to_str((int) s_cond->offset);
+    Instr("istore", cond_offset_str, NULL, NULL);
+
+    TRAVstep(node);
+#ifdef DEBUGGING
+    ASSERT_MSG((LAST_TYPE == VT_NUM), "Got a non-integer value for loop step expression");
+#endif // DEBUGGING
+    Symbol* s_step = STlookup(CURRENT_SCOPE, "_step");
+    char* step_offset_str = int_to_str((int) s_step->offset);
+    Instr("istore", step_offset_str, NULL, NULL);
+
     // Generate bytecode
     char* for_loop_start_name = generate_label_name(STRcpy("for_loop_start"));
+    char* positive_step_size_cond = generate_label_name(STRcpy("positive_step_size"));
+    char* negative_step_size_cond = generate_label_name(STRcpy("negative_step_size"));
+    char* for_loop_common_cond_check = generate_label_name(STRcpy("common_cond_check"));
     char* for_loop_end_name = generate_label_name(STRcpy("for_loop_end"));
 
-    // TODO: Find incremented variable + increment
+    // Emit loop start label
+    Label(for_loop_start_name, false);
+
+    // Evaluate loop condition
+    // --- Perform sign check
+    Instr("iload", step_offset_str, NULL, NULL);
+    Instr("iloadc_0", NULL, NULL, NULL);
+    Instr("ige", NULL, NULL, NULL);
+    Instr("branch_t", positive_step_size_cond, NULL, NULL);
+    Instr("jump", negative_step_size_cond, NULL, NULL);
+
+    // --- Check for positive step size case
+    Label(positive_step_size_cond, false);
+    Instr("iload", loop_offset_str, NULL, NULL);
+    Instr("iload", cond_offset_str, NULL, NULL);
+    Instr("ilt", NULL, NULL, NULL);
+    Instr("jump", for_loop_common_cond_check, NULL, NULL);
+
+    // Check for negative step size case
+    Label(negative_step_size_cond, false);
+    Instr("iload", loop_offset_str, NULL, NULL);
+    Instr("iload", cond_offset_str, NULL, NULL);
+    Instr("igt", NULL, NULL, NULL);
+
+    // Common check, loop exits here if false
+    Label(for_loop_common_cond_check, false);
+    Instr("branch_f", for_loop_end_name, NULL, NULL);
+
+    // Evaluate body
+    TRAVblock(node);
+
+    // Increment value of loop variable
+    TRAVstep(node);
+    Instr("iload", loop_offset_str, NULL, NULL);
+    Instr("iadd", NULL, NULL, NULL);
+    Instr("istore", loop_offset_str, NULL, NULL);
+
+    // Unconditional jump back to loop start (expression evaluation)
+    Instr("jump", for_loop_start_name, NULL, NULL);
+
+    // Emit loop end label
+    Label(for_loop_end_name, false);
 
     // Special case: restore loop counter to zero for next traversal
     CURRENT_SCOPE->for_loop_counter = 0;
@@ -685,7 +748,14 @@ node_st *BCfor(node_st *node)
     // Clean up
     MEMfree(adjusted_name);
     MEMfree(for_loop_start_name);
+    MEMfree(positive_step_size_cond);
+    MEMfree(negative_step_size_cond);
+    MEMfree(for_loop_common_cond_check);
     MEMfree(for_loop_end_name);
+
+    MEMfree(loop_offset_str);
+    MEMfree(cond_offset_str);
+    MEMfree(step_offset_str);
 
     /**
      * Traverse init, cond and step children
@@ -755,10 +825,10 @@ node_st *BCparam(node_st *node)
  */
 node_st *BCvardecl(node_st *node)
 {
-    HAD_EXPR = false;
-    TRAVchildren(node);
+    // TODO: Array support
 
-    if (HAD_EXPR) {
+    if (VARDECL_INIT(node) != NULL) {
+        TRAVinit(node);
         char* name = VARDECL_NAME(node);
         const Symbol* s = STlookup(CURRENT_SCOPE, name);
 #ifdef DEBUGGING
@@ -792,6 +862,8 @@ node_st *BCvardecl(node_st *node)
         MEMfree(instr);
         MEMfree(var_offset_str);
     }
+
+    TRAVnext(node);
 
     /**
      * Match whether it has an expression:
@@ -1095,8 +1167,10 @@ node_st *BCvarlet(node_st *node)
 #endif // DEBUGGING
         instr = safe_concat_str(instr, STRcpy("storen"));
         char* var_delta_str = int_to_str((int) (current_level - var_level));
-        Instr(instr, var_delta_str, int_to_str((int) var_offset), NULL);
+        char* offset_str = int_to_str((int) var_offset);
+        Instr(instr, var_delta_str, offset_str, NULL);
         MEMfree(var_delta_str);
+        MEMfree(offset_str);
     }
 
     MEMfree(instr);

@@ -571,14 +571,51 @@ node_st *CTAfor(node_st *node)
     STinsert(CURRENT_SCOPE, adjusted_name, s_loop);
 
     // Create for-loop scope and switch to it
-    s_loop->as.forloop.scope = STnew(CURRENT_SCOPE, s_loop);
+    const size_t current_scope_depth = CURRENT_SCOPE->nesting_level;
+    s_loop->as.forloop.scope = STnew(CURRENT_SCOPE, CURRENT_SCOPE->parent_fun);
     CURRENT_SCOPE = s_loop->as.forloop.scope;
 
-    // Create loop variable in new scope
+    // Manually override nesting level
+    CURRENT_SCOPE->nesting_level = current_scope_depth;
+
+    // Create loop variable in new scope with correct offset
     Symbol* s_var = SBfromVar(name, VT_NUM, false);
+    s_var->offset = CURRENT_SCOPE->parent_fun->as.fun.scope->localvar_offset_counter++;
     STinsert(CURRENT_SCOPE, name, s_var);
 
-    TRAVchildren(node);
+    // Create loop condition variable in scope with correct offset
+    Symbol* s_cond = SBfromVar("_cond", VT_NUM, false);
+    s_cond->offset = CURRENT_SCOPE->parent_fun->as.fun.scope->localvar_offset_counter++;
+    STinsert(CURRENT_SCOPE, "_cond", s_cond);
+
+    // Create loop step variable in scope with correct offset
+    Symbol* s_step = SBfromVar("_step", VT_NUM, false);
+    s_step->offset = CURRENT_SCOPE->parent_fun->as.fun.scope->localvar_offset_counter++;
+    STinsert(CURRENT_SCOPE, "_step", s_step);
+
+    // Check if all expressions are integers
+    TRAVstart_expr(node);
+    if (!LAST_TYPE == VT_NUM) {
+        HAD_ERROR = true;
+        USER_ERROR("Loop start condition expression must be an integer");
+    }
+    TRAVstop(node);
+    if (!LAST_TYPE == VT_NUM) {
+        HAD_ERROR = true;
+        USER_ERROR("Loop start condition expression must be an integer");
+    }
+    TRAVstep(node);
+    if (!LAST_TYPE == VT_NUM) {
+        HAD_ERROR = true;
+        USER_ERROR("Loop start condition expression must be an integer");
+    }
+
+    // Replace empty step for NUM(1)
+    if (FOR_STEP(node) == NULL) {
+        FOR_STEP(node) = ASTnum(1);
+    }
+
+    TRAVblock(node);
 
     // Special case: restore loop counter to zero for next traversal (during bytecode)
     CURRENT_SCOPE->for_loop_counter = 0;

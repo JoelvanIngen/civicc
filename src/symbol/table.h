@@ -14,6 +14,7 @@ typedef struct SymbolTable {
     size_t for_loop_counter;            // Counter for for_loops
     struct SymbolTable* parent_scope;   // Pointer to parent scope
     Symbol* parent_fun;                 // Function this scope belongs to
+                                        // Always points to a function, even if scope belongs to for-loop var
     htable_st* table;                   // Hashtable mapping symbol name to its properties
 } SymbolTable;
 

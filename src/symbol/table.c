@@ -12,18 +12,7 @@ SymbolTable* STnew(SymbolTable* parent_table, Symbol* parent_symbol) {
     SymbolTable* st = MEMmalloc(sizeof(SymbolTable));
     st->localvar_offset_counter = 0;
     st->for_loop_counter = 0;
-
-    if (parent_table == NULL) {
-        // Global scope
-        st->nesting_level = 0;
-    } else if (parent_symbol->stype == ST_FORLOOP) {
-        // For-loop scope in the same function as parent
-        st->nesting_level = parent_table->nesting_level;
-    } else {
-        // New function, higher nesting level
-        st->nesting_level = parent_table->nesting_level + 1;
-    }
-
+    st->nesting_level = parent_table == NULL ? 0 : parent_table->nesting_level + 1;
     st->parent_scope = parent_table;
     st->parent_fun = parent_symbol;
     st->table = HTnew_String(VARTABLE_SIZE);
