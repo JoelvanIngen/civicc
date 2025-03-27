@@ -54,7 +54,7 @@ static void print_indent() {
  */
 node_st *PRTprogram(node_st *node)
 {
-    printf("START OF PROGRAM\n");
+    printf("START OF PROGRAM");
     TRAVchildren(node);
     printf("\nEND OF PROGRAM\n");
     return node;
@@ -65,7 +65,11 @@ node_st *PRTprogram(node_st *node)
  */
 node_st *PRTdecls(node_st *node)
 {
-    TRAVchildren(node);
+    if (DECLS_DECL(node) != NULL) {
+        printf("\n");
+        TRAVdecl(node);
+    }
+    TRAVnext(node);
     return node;
 }
 
@@ -152,7 +156,6 @@ node_st *PRTfundef(node_st *node)
 {
     const bool has_body = FUNDEF_BODY(node) != NULL;
 
-    printf("\n");
     print_indent();
 
     if (has_body) printf("BEGIN ");
@@ -173,7 +176,9 @@ node_st *PRTfundef(node_st *node)
         INDENT++;
         TRAVchildren(node);
         INDENT--;
-        printf("\nEND FUNDEF(name=%s)", FUNDEF_NAME(node));
+        printf("\n");
+        print_indent();
+        printf("END FUNDEF(name=%s)", FUNDEF_NAME(node));
     }
     
     
@@ -272,8 +277,6 @@ node_st *PRTglobdef(node_st *node)  // TODO: ADD DIMS
         printf(" <- ");
         TRAVinit(node);
     }
-
-    printf("\n");
 
     return node;
 }
