@@ -103,7 +103,6 @@ void add_importvars() {
 
     int prev_highest_saved = highest_saved;
     do {
-        // printf("CHECKPOINT: found: %i, saved: %i\n", highest_found, highest_saved); fflush(stdout);
         for (htable_iter_st *iter = HTiterate(GB_GLOBAL_SCOPE->table); iter;
                 iter = HTiterateNext(iter)) {
             const Symbol *s = HTiterValue(iter);
