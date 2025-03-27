@@ -290,7 +290,7 @@ node_st *BCfuncall(node_st *node)
             fun_level, current_level);
 #endif // DEBUGGING
         char* delta_level = int_to_str((int) (current_level - fun_level));
-        Instr("isr", delta_level, NULL, NULL);
+        Instr("isrn", delta_level, NULL, NULL);
         MEMfree(delta_level);
     }
 
