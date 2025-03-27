@@ -834,6 +834,79 @@ node_st *BCassign(node_st *node)
  */
 node_st *BCbinop(node_st *node)
 {
+    // SEPARATE LOGIC FOR AND, AND OR SHORT-CIRCUITING
+    const enum BinOpType t = BINOP_OP(node);
+    if (t == BO_and) { // Short-circuit AND (&&)
+        char* short_circuit_label = generate_label_name(STRcpy("else"));
+        char* end_and_label = generate_label_name(STRcpy("end"));
+
+        TRAVleft(node);
+        const ValueType left_value = LAST_TYPE;
+#ifdef DEBUGGING
+        ASSERT_MSG((left_value == VT_BOOL), "Bytecode: Left operand of 'and' is not boolean");
+#endif // DEBUGGING
+
+        // If left operand is false, jump to short_circuit_label
+        Instr("branch_f", short_circuit_label, NULL, NULL);
+
+        // If left was true, evaluate right and perform AND (bmul)
+        TRAVright(node);
+        const ValueType right_value = LAST_TYPE;
+#ifdef DEBUGGING
+        ASSERT_MSG((right_value == VT_BOOL), "Bytecode: Right operand of 'and' is not boolean");
+#endif // DEBUGGING
+
+        // bmul instruction not necessary as next instruction will be the result (left was eliminated)
+        Instr("jump", end_and_label, NULL, NULL); // Jump to the end
+
+        Label(short_circuit_label, false);
+        Instr("bloadc_f", NULL, NULL, NULL); // Load false directly for short-circuit
+
+        Label(end_and_label, false);
+
+        LAST_TYPE = VT_BOOL; // Result of AND is boolean
+
+        MEMfree(short_circuit_label);
+        MEMfree(end_and_label);
+
+        return node;
+
+    } else if (t == BO_or) {
+        // Short-circuit OR (||)
+        char* short_circuit_label = generate_label_name(STRcpy("else"));
+        char* end_or_label = generate_label_name(STRcpy("end"));
+
+        TRAVleft(node);
+        const ValueType left_value = LAST_TYPE;
+#ifdef DEBUGGING
+        ASSERT_MSG((left_value == VT_BOOL), "Left operand of 'or' is not boolean");
+#endif // DEBUGGING
+        // If left operand is true, jump to short_circuit_label
+        Instr("branch_t", short_circuit_label, NULL, NULL);
+
+        // If left was false, evaluate right and perform OR (badd)
+        TRAVright(node);
+        const ValueType right_value = LAST_TYPE;
+#ifdef DEBUGGING
+        ASSERT_MSG((right_value == VT_BOOL), "Right operand of 'or' is not boolean");
+#endif // DEBUGGING
+
+        // badd instruction not necessary as next instruction will be the result (left was eliminated)
+        Instr("jump", end_or_label, NULL, NULL); // Jump to the end
+
+        Label(short_circuit_label, false);
+        Instr("bloadc_t", NULL, NULL, NULL); // Load true directly for short-circuit
+
+        Label(end_or_label, false);
+
+        LAST_TYPE = VT_BOOL; // Result of OR is boolean
+
+        MEMfree(short_circuit_label);
+        MEMfree(end_or_label);
+
+        return node;
+    }
+
     TRAVleft(node);
     const ValueType left_value = LAST_TYPE;
     TRAVright(node);
@@ -855,7 +928,7 @@ node_st *BCbinop(node_st *node)
 #endif
     }
 
-    switch (BINOP_OP(node)) {
+    switch (t) {
         case BO_add:
             // badd is allowed; is logical disjunction of boolean values
             instr = safe_concat_str(instr, STRcpy("add"));
@@ -918,20 +991,6 @@ node_st *BCbinop(node_st *node)
         case BO_ne:
             instr = safe_concat_str(instr, STRcpy("ne"));
             LAST_TYPE = VT_BOOL;
-            break;
-        case BO_and:
-#ifdef DEBUGGING
-            if (left_value == VT_NUM) ERROR("&& operator was performed on integer values");
-            if (left_value == VT_FLOAT) ERROR("&& operator was performed on float values");
-#endif // DEBUGGING
-            instr = safe_concat_str(instr, STRcpy("mul"));
-            break;
-        case BO_or:
-#ifdef DEBUGGING
-            if (left_value == VT_NUM) ERROR("|| operator was performed on integer values");
-            if (left_value == VT_FLOAT) ERROR("|| operator was performed on float values");
-#endif // DEBUGGING
-            instr = safe_concat_str(instr, STRcpy("add"));
             break;
         default:  // Should never happen
 #ifdef DEBUGGING
