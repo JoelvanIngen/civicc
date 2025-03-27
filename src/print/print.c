@@ -145,7 +145,12 @@ node_st *PRTcast(node_st *node)
  */
 node_st *PRTfundefs(node_st *node)
 {
+    if (FUNDEFS_FUNDEF(node) != NULL) {
+        printf("\n");
+    }
+
     TRAVchildren(node);
+
     return node;
 }
 
