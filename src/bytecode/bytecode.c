@@ -397,7 +397,7 @@ node_st *BCcast(node_st *node) {
         char* endif_label_name = generate_label_name(STRcpy("end"));
 
         Instr("floadc_0", NULL, NULL, NULL);
-        Instr("ine", NULL, NULL, NULL);
+        Instr("fne", NULL, NULL, NULL);
         Instr("branch_f", else_label_name, NULL, NULL);
         Instr("bloadc_t", NULL, NULL, NULL);
         Instr("jump", endif_label_name, NULL, NULL);
