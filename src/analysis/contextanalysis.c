@@ -362,13 +362,12 @@ node_st *CTAfuncall(node_st *node)
     // Push new function call stack to allow for nested function calls
     const bool was_saving_args = SAVING_ARGS;
     SAVING_ARGS = true;
-    // printf("Put SAVING_ARGS to %i\n", SAVING_ARGS);
     ALSpush(ALS);
     TRAVchildren(node);
     SAVING_ARGS = was_saving_args;
 
     // Arguments provided in function call
-    Argument** args = ALSgetCurrentArgs(ALS);
+    Argument* args = ALSgetCurrentArgs(ALS);
     const size_t args_len = ALSgetCurrentLength(ALS);
 
     // Arguments expected by function
@@ -392,23 +391,24 @@ node_st *CTAfuncall(node_st *node)
         return node;
     }
 
-    // Iterate through all params and arguments and compare properties
+    // Iterate through all params and arguments pairs and compare properties
     for (size_t i = 0; i < params_len; i++) {
-        const Argument* arg = args[i];
+        printf("PARAMS LEN %lu, ARGS_LEN %lu\n", params_len, args_len);
+        fflush(stdout);
         // Error if not similar type
-        if (arg->type != param_types[i]) {
+        if (args[i].type != param_types[i]) {
             HAD_ERROR = true;
             USER_ERROR("Argument type %s and parameter type %s (%i) don't match",
-                vt_to_str(arg->type), vt_to_str(param_types[i]), param_types[i]);
+                vt_to_str(args[i].type), vt_to_str(param_types[i]), param_types[i]);
             return node;
         }
 
-        if (IS_ARRAY(arg->type)) {
+        if (IS_ARRAY(args[i].type)) {
             // Compare argument dimensions vs expected parameter dimensions
-            if (arg->arr_dim_count != param_dim_counts[i]) {
+            if (args[i].arr_dim_count != param_dim_counts[i]) {
                 HAD_ERROR = true;
                 USER_ERROR("Argument has %lu dimensions, but function parameter expects %lu",
-                    arg->arr_dim_count, param_dim_counts[i]);
+                    args[i].arr_dim_count, param_dim_counts[i]);
             }
         }
     }

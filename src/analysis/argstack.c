@@ -19,7 +19,7 @@ static void checkResizeAL(AL* al) {
 static void checkResizeALS(ALS* als) {
     if (als->ptr + 1 >= als->capacity) {
         als->capacity = als->capacity * 2;
-        als->fun_calls = MEMrealloc(als->fun_calls, als->capacity * sizeof(Argument));
+        als->fun_calls = MEMrealloc(als->fun_calls, als->capacity * sizeof(AL*));
     }
 }
 
@@ -82,8 +82,8 @@ void ALSadd(ALS* als, const ValueType type) {
 }
 
 /** Points to the first argument of the current scope */
-Argument** ALSgetCurrentArgs(const ALS* als) {
-    return &als->fun_calls[als->ptr - 1]->args;
+Argument* ALSgetCurrentArgs(const ALS* als) {
+    return als->fun_calls[als->ptr - 1]->args;
 }
 
 /** Returns the length of the current scope (upper bound exclusive) */

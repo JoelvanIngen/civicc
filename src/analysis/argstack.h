@@ -29,5 +29,5 @@ void ALSfree(ArgListStack** als);
 void ALSpush(ArgListStack* als);
 void ALSpop(ArgListStack* als);
 void ALSadd(ArgListStack* als, ValueType type);
-Argument** ALSgetCurrentArgs(const ArgListStack* als);
+Argument* ALSgetCurrentArgs(const ArgListStack* als);
 size_t ALSgetCurrentLength(const ArgListStack* als);
