@@ -232,8 +232,6 @@ node_st *BCreturn(node_st *node)
  */
 node_st *BCfuncall(node_st *node)
 {
-    // TODO: Correctly handle calls to external functions
-
     char* name = FUNCALL_NAME(node);
     const Symbol* s = ScopeTreeFind(CURRENT_SCOPE, name);
 #ifdef DEBUGGING

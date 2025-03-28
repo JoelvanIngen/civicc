@@ -219,7 +219,6 @@ void CTAfini() {
  */
 node_st *CTAprogram(node_st *node)
 {
-    // TODO: Free global scope after bytecode generation
     CURRENT_SCOPE = STnew(NULL, NULL);
     GB_GLOBAL_SCOPE = CURRENT_SCOPE;
 
@@ -733,7 +732,7 @@ node_st *CTAglobdef(node_st *node)
 
     TRAVinit(node);
 
-    // TODO: Check if types implicitly cast
+    // Types do not implicitly convert
     if (GLOBDEF_INIT(node) != NULL && ct_to_vt(GLOBDEF_TYPE(node), is_array) != LAST_TYPE) {
         HAD_ERROR = true;
         USER_ERROR("Variable of type %s was initialised with expression of type %s",
@@ -813,7 +812,7 @@ node_st *CTAvardecl(node_st *node)
     if (LAST_TYPE != VT_NULL) {
         // Compare types
         // TODO: Allow scalar to init array
-        // TODO: Find out if types implicitly cast
+        // Types do not implicitly cast
         if (type != LAST_TYPE) {
             HAD_ERROR = true;
             USER_ERROR("Tried to initialise variable %s with %s",
@@ -964,7 +963,6 @@ node_st *CTAmonop(node_st *node)
 
     // Confirm type is correct
     switch (MONOP_OP(node)) {
-        // TODO: Find out if negated bool switches values (probably not)
         case MO_neg:
             if (!(LAST_TYPE == VT_NUM || LAST_TYPE == VT_FLOAT)) {
                 HAD_ERROR = true;
@@ -989,8 +987,6 @@ node_st *CTAmonop(node_st *node)
  */
 node_st *CTAvarlet(node_st *node)
 {
-    // TODO: Disallow storing to imported variables
-
     // Note: Requires array support
 
     char* name = VARLET_NAME(node);
