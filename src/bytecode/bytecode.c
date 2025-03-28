@@ -81,39 +81,8 @@ char* generate_label_name(char* name) {
     return safe_concat_str(res, name);
 }
 
-void add_importvars() {
-    // Run loop multiple times to get the highest offset imported since they are not stored in order
-    // in the hashtable, but they need to be written to the file in order
-    int highest_found = -1;
-    int highest_saved = -1;
-
-    int prev_highest_saved = highest_saved;
-    do {
-        for (htable_iter_st *iter = HTiterate(GB_GLOBAL_SCOPE->table); iter;
-                iter = HTiterateNext(iter)) {
-            const Symbol *s = HTiterValue(iter);
-
-            if (s->imported) {
-                if ((int) s->offset > highest_found) highest_found = (int) s->offset;
-                if ((int) s->offset == highest_saved + 1) {
-                    // TODO: Save the thing
-                    highest_saved++;
-                }
-            }
-        }
-
-#ifdef DEBUGGING
-        if (highest_saved == prev_highest_saved && highest_found != highest_saved) {
-            ERROR("Loop stuck; highest found: %i, highest saved: %i", highest_found, highest_saved);
-        }
-#endif // DEBUGGING
-    } while (highest_found != highest_saved);
-}
-
 static void init() {
     CURRENT_SCOPE = GB_GLOBAL_SCOPE;
-
-    add_importvars();
 }
 
 static void fini() {
