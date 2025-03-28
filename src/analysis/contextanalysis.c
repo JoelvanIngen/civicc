@@ -7,16 +7,12 @@
  *
  */
 
-// TODO: Find method to count amount of array init entries,
-// and push scope's offset counter by that amount
-
 #include "ccn/ccn.h"
 #include "ccngen/ast.h"
 #include "ccngen/trav.h"
 
 #include "common.h"
 #include "global/globals.h"
-#include "idlist.h"
 #include "argstack.h"
 #include "dimsliststack.h"
 #include "symbol/scopetree.h"
@@ -26,6 +22,12 @@ typedef enum {
     DECLARATION_PASS,
     ANALYSIS_PASS,
 } PassType;
+
+typedef enum Origin {
+    GLOBAL_ORIGIN,
+    LOCAL_ORIGIN,
+    IMPORTED_ORIGIN,
+} Origin;
 
 static PassType PASS;
 static ValueType LAST_TYPE;
@@ -41,10 +43,7 @@ static ArgListStack* ALS;
 static DimsListStack* DLS;
 
 // Flag to determine if we are saving indexes to stack
-static bool SAVING_IDXS = false;
-
-// Listing parameter dimensions
-static IdList* IDL = NULL;
+static bool INDEXING_ARRAY = false;
 
 // Keeps track of whether we had an error during analysis
 static bool HAD_ERROR = false;
@@ -56,10 +55,8 @@ static size_t GLOBAL_VAR_OFFSET = 0;
 static size_t FUN_IMPORT_OFFSET = 0;
 static size_t VAR_IMPORT_OFFSET = 0;
 static size_t FUN_EXPORT_OFFSET = 0;
-static size_t VAR_EXPORT_OFFSET = 0;
 
 #define IS_ARITH_TYPE(vt) (vt == VT_NUM || vt == VT_FLOAT)
-#define IS_ARRAY(vt) (vt == VT_NUMARRAY || vt == VT_FLOATARRAY || vt == VT_BOOLARRAY)
 
 // Short for printing error on duplicate identifier name and immediately returning
 #define HANDLE_DUPLICATE_ID(name) do { \
@@ -78,18 +75,6 @@ static size_t VAR_EXPORT_OFFSET = 0;
     } \
 } while (false)
 
-ValueType demote_array_type(const ValueType array_type) {
-    switch (array_type) {
-        case VT_NUMARRAY: return VT_NUM;
-        case VT_FLOATARRAY: return VT_FLOAT;
-        case VT_BOOLARRAY: return VT_BOOL;
-        default: // Should never occur
-#ifdef DEBUGGING
-            ERROR("Cannot demote ValueType array %i", array_type);
-#endif
-    }
-}
-
 static void exit_if_error() {
     if (HAD_ERROR) {
         USER_ERROR("One or multiple errors occurred, exiting...");
@@ -101,90 +86,176 @@ static bool name_exists_in_top_scope(char* name) {
     return STlookup(CURRENT_SCOPE, name) != NULL;
 }
 
-/**
- * Traverses and saves the indices to DimsList. This function is for
- * nodes that use the 'indices' macro. DLSpop needs to be called after
- * this function, if the values are needed before discarding
- * @param node current node
- */
-static void handle_array_dims_exprs_for_indices_macro(node_st* node) {
-    // Push new DimList onto the stack
-    DLSpush(DLS);
-
-    // Get old flag for saving indices
-    const bool was_saving_idxs = SAVING_IDXS;
-
-    // Set new flag for saving indices to true
-    SAVING_IDXS = true;
-
-    TRAVindices(node);
-
-    // Restore saving indices flag
-    SAVING_IDXS = was_saving_idxs;
+static char* create_array_dim_name(const char* parent_name, const size_t i) {
+    return safe_concat_str(
+            safe_concat_str(
+                safe_concat_str(STRcpy("_index"),
+                    int_to_str((int) i)),
+                    STRcpy("_")),
+                STRcpy(parent_name));
 }
 
-/**
- * Traverses and saves the indices to DimsList. This function is for
- * nodes that use the 'dims' macro. DLSpop needs to be called after
- * this function, if the values are needed before discarding
- * @param node current node
- */
-static void handle_array_dims_exprs_for_dims_macro(node_st* node) {
-    // Push new DimList onto the stack
-    DLSpush(DLS);
+static size_t count_exprs(node_st* exprs_node) {
+    size_t count = 0;
 
-    // Get old flag for saving indices
-    const bool was_saving_idxs = SAVING_IDXS;
+    while (exprs_node != NULL) {
+        count++;
+        if (NODE_TYPE(EXPRS_EXPR(exprs_node)) == NT_VAR) {
+            node_st* var_node = EXPRS_EXPR(exprs_node);
+            Symbol* var_symbol = ScopeTreeFind(CURRENT_SCOPE, VAR_NAME(var_node));
+            if (var_symbol == NULL) {
+                HAD_ERROR = true;
+                ERROR("Cannot find variable named %s", VAR_NAME(var_node));
+            }
+            if (IS_ARRAY(var_symbol->vtype)) {
+                count += var_symbol->as.array.dim_count;
+            }
+        }
+        exprs_node = EXPRS_NEXT(exprs_node);
+    }
 
-    // Set new flag for saving indices to true
-    SAVING_IDXS = true;
-
-    TRAVdims(node);
-
-    // Restore saving indices flag
-    SAVING_IDXS = was_saving_idxs;
+    return count;
 }
 
-static size_t count_params(node_st* first_param) {
-    if (first_param == NULL) {
-        return 0;
-    }
+static size_t count_ids(node_st* ids_node) {
+    size_t count = 0;
 
-    size_t tot = 0;
-    node_st* param = first_param;
-    while (param != NULL) {
-        tot++;
-        param = PARAM_NEXT(param);
+    while (ids_node != NULL) {
+        count++;
+        ids_node = IDS_NEXT(ids_node);
     }
-
-    return tot;
+    return count;
 }
 
-static size_t count_exprs(node_st* first_expr) {
-    if (first_expr == NULL) {
-        return 0;
+static size_t count_params(node_st* param_node) {
+    size_t count = 0;
+
+    while (param_node != NULL) {
+        count++;
+        if (PARAM_DIMS(param_node) != NULL) count += count_ids(PARAM_DIMS(param_node));
+        param_node = PARAM_NEXT(param_node);
     }
 
-    size_t tot = 0;
-    node_st* expr = first_expr;
-    while (expr != NULL) {
-        tot++;
-        expr = PARAM_NEXT(expr);
-    }
-
-    return tot;
+    return count;
 }
 
-static void find_param_types(node_st* first_param, Symbol* s, size_t param_count) {
-    if (param_count == 0) {
-        return;
+static Symbol** get_ids(node_st* id_node, const size_t count, const Origin orig) {
+    // TODO: Error on name collision
+    Symbol** ids = MEMmalloc(sizeof(Symbol*) * count);
+
+    for (size_t i = 0; i < count; i++) {
+        char* name = IDS_NAME(id_node);
+        Symbol* s = SBfromVar(name, VT_NUM, orig == IMPORTED_ORIGIN);
+        ids[i] = s;
+
+        if (STlookup(CURRENT_SCOPE, name)) {
+            HAD_ERROR = true;
+            USER_ERROR("Name %s was already defined within scope, but is defined again", name);
+        }
+        STinsert(CURRENT_SCOPE, name, s);
+
+        switch (orig) {
+            case IMPORTED_ORIGIN: s->offset = VAR_IMPORT_OFFSET++; break;
+            case LOCAL_ORIGIN: s->offset = CURRENT_SCOPE->localvar_offset_counter++; break;
+            case GLOBAL_ORIGIN: s->offset = GLOBAL_VAR_OFFSET++; break;
+        }
+
+        id_node = IDS_NEXT(id_node);
     }
 
-    node_st* param = first_param;
+    return ids;
+}
+
+static Symbol** get_exprs(node_st* id_node, const char* parent_name, const size_t count, const Origin orig,
+    const ValueType require_type) {
+
+    Symbol** ids = MEMmalloc(sizeof(Symbol*) * count);
+
+    for (size_t i = 0; i < count; i++) {
+        char* name = create_array_dim_name(parent_name, i);
+        Symbol* s = SBfromVar(name, VT_NUM, orig == IMPORTED_ORIGIN);
+        ids[i] = s;
+
+        STinsert(CURRENT_SCOPE, name, s);
+
+        switch (orig) {
+            case IMPORTED_ORIGIN: s->offset = VAR_IMPORT_OFFSET++; break;
+            case LOCAL_ORIGIN: s->offset = CURRENT_SCOPE->localvar_offset_counter++; break;
+            case GLOBAL_ORIGIN: s->offset = GLOBAL_VAR_OFFSET++; break;
+        }
+
+        TRAVexprs(id_node);
+        if (require_type != VT_NULL && require_type != LAST_TYPE) {
+            HAD_ERROR = true;
+            USER_ERROR("Type mismatch; expected %s but got %s", vt_to_str(require_type), vt_to_str(LAST_TYPE));
+        }
+
+        id_node = IDS_NEXT(id_node);
+        MEMfree(name);
+    }
+
+    return ids;
+}
+
+static size_t count_param_dims(node_st* param_node) {
+    size_t count = 0;
+    node_st* dim_node = PARAM_DIMS(param_node);
+
+    while (dim_node != NULL) {
+        count++;
+        dim_node = IDS_NEXT(dim_node);
+    }
+    return count;
+}
+
+static void find_param_types(node_st* param_node, const Symbol* s, const size_t param_count) {
     for (size_t i = 0; i < param_count; i++) {
-        s->as.fun.param_types[i] = ct_to_vt(PARAM_TYPE(param), false);
-        param = PARAM_NEXT(param);
+        const size_t n_ids = count_ids(PARAM_DIMS(param_node));
+        
+        // Add dimensions before array
+        for (size_t j = 0; j < n_ids; j++) {
+            s->as.fun.param_types[i] = VT_NUM;
+            i++;
+        }
+
+        s->as.fun.param_types[i] = ct_to_vt(PARAM_TYPE(param_node), n_ids > 0);
+        param_node = PARAM_NEXT(param_node);
     }
+}
+
+static ValueType* find_funcall_types(node_st* exprs_node, const size_t count) {
+    ValueType* types = MEMmalloc(sizeof(ValueType) * count);
+
+    for (size_t i = 0; i < count; i++) {
+        if (NODE_TYPE(EXPRS_EXPR(exprs_node)) == NT_VAR) {
+            node_st* var_node = EXPRS_EXPR(exprs_node);
+            Symbol* var_symbol = ScopeTreeFind(CURRENT_SCOPE, VAR_NAME(var_node));
+            if (var_symbol == NULL) {
+                HAD_ERROR = true;
+                ERROR("Cannot find variable named %s", VAR_NAME(var_node));
+                return types;
+            }
+            if (IS_ARRAY(var_symbol->vtype)) {
+                // Add indices before array
+                for (size_t j = 0; j < var_symbol->as.array.dim_count; j++) {
+                    types[i] = VT_NUM;
+                    i++;
+                }
+            }
+
+            TRAVexpr(exprs_node);
+            types[i] = var_symbol->vtype;
+
+        } else {
+            LAST_TYPE = VT_NULL;
+            TRAVexpr(exprs_node);
+            types[i] = LAST_TYPE;
+        }
+
+        exprs_node = EXPRS_NEXT(exprs_node);
+    }
+
+    return types;
 }
 
 /**
@@ -261,30 +332,27 @@ node_st *CTAdecls(node_st *node)
  */
 node_st *CTAexprs(node_st *node)
 {
-    // Keep state of index keeping and set to false to prevent children from adding themselves
-    const bool was_saving_idxs = SAVING_IDXS;
+    // TODO: If we're being smart (like with counting IDs, we can probably get rid
+    // of the SAVING_ARGS flag?
+
+    // Track since array indexing requires integers as last type
+    const bool was_indexing_array = INDEXING_ARRAY;
 
     // Keep state of argument keeping and set to false to prevent children from adding themselves
     const bool was_saving_args = SAVING_ARGS;
 
-    SAVING_IDXS = false;
+    INDEXING_ARRAY = false;
     SAVING_ARGS = false;
     TRAVexpr(node);
-    SAVING_IDXS = was_saving_idxs;
+    INDEXING_ARRAY = was_indexing_array;
     SAVING_ARGS = was_saving_args;
 
-    if (SAVING_IDXS) {
-        // TODO: Find out which values are allowed (can floats be used for index, does bool cast to idx 0 or 1)?
+    if (INDEXING_ARRAY) {
+        // Array indexes must always be integers
         if (LAST_TYPE != VT_NUM) {
             HAD_ERROR = true;
-            USER_ERROR("Can only index arrays with integers");
+            USER_ERROR("Wrong index type in array index, expected int but got %s", vt_to_str(LAST_TYPE));
         }
-
-        // TODO: this doesn't really make sense, we don't know the value yet, so
-        // we will need to rework this, but in the meantime, do add it to DimsList
-        // since we do want to keep the amount of dimensions for analysis
-        // We'll just use 0 until we rework this
-        DLSadd(DLS, 0);
     }
 
     if (SAVING_ARGS) {
@@ -309,15 +377,12 @@ node_st *CTAarrexpr(node_st *node)
  */
 node_st *CTAids(node_st *node)
 {
-    char* name = IDS_NAME(node);
-
-    // Add ID name to ID list
-    IDLadd(IDL, name);
-
-    // Add name to scope as type integer
-    // TODO: Add to scope as symbol
-    // TODO: Add offset
-    STinsert(CURRENT_SCOPE, name, VT_NUM);
+    // char* name = IDS_NAME(node);
+    //
+    // // Add name to scope as type integer
+    // // TODO: Add to scope as symbol
+    // // TODO: Add offset
+    // STinsert(CURRENT_SCOPE, name, VT_NUM);
 
     TRAVchildren(node);
     return node;
@@ -378,20 +443,13 @@ node_st *CTAfuncall(node_st *node)
         return node;
     }
 
-    // Push new function call stack to allow for nested function calls
-    const bool was_saving_args = SAVING_ARGS;
-    SAVING_ARGS = true;
-    ALSpush(ALS);
-    TRAVchildren(node);
-    SAVING_ARGS = was_saving_args;
-
-    // Arguments provided in function call
-    Argument* args = ALSgetCurrentArgs(ALS);
-    const size_t args_len = ALSgetCurrentLength(ALS);
+    node_st* args_node = FUNCALL_FUN_ARGS(node);
+    const size_t args_len = count_exprs(args_node);
+    ValueType* types = find_funcall_types(args_node, args_len);
 
     // Arguments expected by function
     const ValueType* param_types = s->as.fun.param_types;
-    const size_t* param_dim_counts = s->as.fun.param_dim_counts;
+    // const size_t* param_dim_counts = s->as.fun.param_dim_counts;
     const size_t params_len = s->as.fun.param_count;
 
     // Error if more arguments provided than parameters expected
@@ -399,6 +457,7 @@ node_st *CTAfuncall(node_st *node)
         HAD_ERROR = true;
         USER_ERROR("Too many arguments; got %lu but function %s only expects %lu",
             args_len, FUNCALL_NAME(node), params_len);
+        MEMfree(types);
         return node;
     }
 
@@ -407,31 +466,32 @@ node_st *CTAfuncall(node_st *node)
         HAD_ERROR = true;
         USER_ERROR("Not enough arguments; got %lu but function %s expects %lu",
             args_len, FUNCALL_NAME(node), params_len);
+        MEMfree(types);
         return node;
     }
 
     // Iterate through all params and arguments pairs and compare properties
     for (size_t i = 0; i < params_len; i++) {
         // Error if not similar type
-        if (args[i].type != param_types[i]) {
+        if (types[i] != param_types[i]) {
             HAD_ERROR = true;
-            USER_ERROR("Argument type %s and parameter type %s (%i) don't match",
-                vt_to_str(args[i].type), vt_to_str(param_types[i]), param_types[i]);
-            return node;
+            USER_ERROR("Argument type %s and parameter type %s don't match",
+                vt_to_str(types[i]), vt_to_str(param_types[i]));
+            printf("At %s\n", FUNCALL_NAME(node));
         }
 
-        if (IS_ARRAY(args[i].type)) {
-            // Compare argument dimensions vs expected parameter dimensions
-            if (args[i].arr_dim_count != param_dim_counts[i]) {
-                HAD_ERROR = true;
-                USER_ERROR("Argument has %lu dimensions, but function parameter expects %lu",
-                    args[i].arr_dim_count, param_dim_counts[i]);
-            }
-        }
+        // TODO: Re-introduce this size check when I figure out how
+        // if (IS_ARRAY(types[i])) {
+        //     // Compare argument dimensions vs expected parameter dimensions
+        //     if (args[i].arr_dim_count != param_dim_counts[i]) {
+        //         HAD_ERROR = true;
+        //         USER_ERROR("Argument has %lu dimensions, but function parameter expects %lu",
+        //             args[i].arr_dim_count, param_dim_counts[i]);
+        //     }
+        // }
     }
 
-    // Remove function call from stack
-    ALSpop(ALS);
+    MEMfree(types);
 
     // Last type is function return type
     LAST_TYPE = s->vtype;
@@ -668,27 +728,28 @@ node_st *CTAglobdecl(node_st *node)
     HANDLE_DUPLICATE_ID(name);
 
     // Find dimensions, represented as IDs
-    IDL = IDLnew();
-    TRAVdims(node);
+    node_st* first_id = GLOBDECL_DIMS(node);
+    const size_t n_dims = count_ids(first_id);
 
-    const bool is_array = IDL->ptr > 0;
+    const bool is_array = n_dims > 0;
 
-    // Add self to vartable of current scope
-    Symbol* s;
+    // Create symbols
     const ValueType type = ct_to_vt(GLOBDECL_TYPE(node), is_array);
-
+    Symbol* s;
     if (is_array) {
         s = SBfromArray(name, type, true);
-        s->as.array.dim_count = IDL->ptr;
+
+        // Create symbols for all index variables
+        Symbol** ids = get_ids(first_id, n_dims, IMPORTED_ORIGIN);
+
+        s->as.array.dim_count = n_dims;
+        s->as.array.dims = ids;
     } else {
         s = SBfromVar(name, type, true);
     }
 
-    s->offset = VAR_EXPORT_OFFSET++;
+    s->offset = VAR_IMPORT_OFFSET++;
     STinsert(CURRENT_SCOPE, name, s);
-
-    // Clean up - note: free function does not (yet) free internal ids list
-    IDLfree(&IDL);
 
     return node;
 }
@@ -707,30 +768,33 @@ node_st *CTAglobdef(node_st *node)
 
     HANDLE_DUPLICATE_ID(name);
 
-    // Find dimensions
-    handle_array_dims_exprs_for_dims_macro(node);
+    // Find dimensions, represented as Exprs
+    node_st* first_expr = GLOBDEF_DIMS(node);
+    const size_t n_dims = count_exprs(first_expr);
 
-    // Add self to vartable of current scope
-    const ValueType type = ct_to_vt(GLOBDEF_TYPE(node), false);
+    const bool is_array = n_dims > 0;
 
-    Symbol* s = SBfromVar(name, type, false);
-    s->offset = GLOBAL_VAR_OFFSET++;
-    STinsert(CURRENT_SCOPE, name, s);
+    // Create symbols
+    const ValueType type = ct_to_vt(GLOBDEF_TYPE(node), is_array);
+    Symbol* s;
 
-    // Save information to array symbol
-    DimsList* dml = DLSpeekTop(DLS);
+    if (is_array) {
+        s = SBfromArray(name, type, false);
 
-    bool is_array = false;
-    if (dml->size > 0) {
-        is_array = true;
-        s->as.array.dim_count = dml->size;
-        s->as.array.dims = dml->dims;
+        // Create symbols and add to table for all index variables
+        // Also traverses the exprs so we don't need to manually
+        Symbol** ids = get_exprs(first_expr, name, n_dims, GLOBAL_ORIGIN, VT_NUM);
+
+        s->as.array.dim_count = n_dims;
+        s->as.array.dims = ids;
+    } else {
+        s = SBfromVar(name, type, false);
     }
 
-    // Clean up, except for dims list
-    DMLfree(&dml);
-
     TRAVinit(node);
+
+    s->offset = GLOBAL_VAR_OFFSET++;
+    STinsert(CURRENT_SCOPE, name, s);
 
     // Types do not implicitly convert
     if (GLOBDEF_INIT(node) != NULL && ct_to_vt(GLOBDEF_TYPE(node), is_array) != LAST_TYPE) {
@@ -752,36 +816,33 @@ node_st *CTAparam(node_st *node)
 {
     // Note: Requires array support
 
-    char* param_name = PARAM_NAME(node);
+    char* name = PARAM_NAME(node);
 
-    HANDLE_DUPLICATE_ID(param_name);
+    HANDLE_DUPLICATE_ID(name);
 
     // Find dimensions, represented as IDs
-    IDL = IDLnew();
-    TRAVdims(node);
+    node_st* first_id = PARAM_DIMS(node);
+    const size_t n_dims = count_ids(first_id);
 
-    // Is pointer if more than zero
-    const bool is_array = IDL->ptr > 0;
+    const bool is_array = n_dims > 0;
 
-    // Add self to vartable of current scope
-    const ValueType param_type = ct_to_vt(PARAM_TYPE(node), is_array);
-
-    // Add parameter as variable to scope
-    // TODO: Verify that param identifier cannot be imported (unless size is specified externally)
-    Symbol* s = SBfromVar(param_name, param_type, false);
-    s->offset = CURRENT_SCOPE->localvar_offset_counter++;
-    STinsert(CURRENT_SCOPE, param_name, s);
-
+    // Create symbols
+    const ValueType type = ct_to_vt(PARAM_TYPE(node), is_array);
+    Symbol* s;
     if (is_array) {
-        // Add array properties
-        s->as.array.dim_count = IDL->ptr;
+        s = SBfromArray(name, type, true);
+
+        // Create symbols for all index variables
+        Symbol** ids = get_ids(first_id, n_dims, LOCAL_ORIGIN);
+
+        s->as.array.dim_count = n_dims;
+        s->as.array.dims = ids;
+    } else {
+        s = SBfromVar(name, type, false);
     }
 
-    // Add parameter to the function it belongs to
-    Symbol* parent_fun = CURRENT_SCOPE->parent_fun;
-    SBaddParam(parent_fun, IDL->ptr);
-
-    IDLfree(&IDL);
+    s->offset = CURRENT_SCOPE->localvar_offset_counter++;
+    STinsert(CURRENT_SCOPE, name, s);
 
     TRAVnext(node);
     return node;
@@ -798,41 +859,44 @@ node_st *CTAvardecl(node_st *node)
 
     HANDLE_DUPLICATE_ID(name);
 
-    // Find dimensions
-    handle_array_dims_exprs_for_dims_macro(node);
+    // Find dimensions, represented as Exprs
+    node_st* first_expr = VARDECL_DIMS(node);
+    const size_t n_dims = count_exprs(first_expr);
 
-    const DimsList* dml = DLSpeekTop(DLS);
-    const bool is_array = dml->size > 0;
+    const bool is_array = n_dims > 0;
 
+    // Create symbols
     const ValueType type = ct_to_vt(VARDECL_TYPE(node), is_array);
+    Symbol* s;
 
-    LAST_TYPE = VT_NULL;
-    TRAVinit(node);
+    if (is_array) {
+        s = SBfromArray(name, type, false);
 
-    if (LAST_TYPE != VT_NULL) {
-        // Compare types
-        // TODO: Allow scalar to init array
-        // Types do not implicitly cast
-        if (type != LAST_TYPE) {
-            HAD_ERROR = true;
-            USER_ERROR("Tried to initialise variable %s with %s",
-                vt_to_str(type), vt_to_str(LAST_TYPE));
-        }
+        // Create symbols and add to table for all index variables
+        // Also traverses the exprs so we don't need to manually
+        Symbol** ids = get_exprs(first_expr, name, n_dims, LOCAL_ORIGIN, VT_NUM);
+
+        s->as.array.dim_count = n_dims;
+        s->as.array.dims = ids;
+    } else {
+        s = SBfromVar(name, type, false);
     }
 
-    // Create and add symbol to scope
-    Symbol* s = SBfromVar(name, type, false);
+    // Traverse init before adding to scope to allow for correct shadowing and use-before-initialisation
+    TRAVinit(node);
+
     s->offset = CURRENT_SCOPE->localvar_offset_counter++;
     STinsert(CURRENT_SCOPE, name, s);
 
-    if (is_array) {
-        // Save information to array symbol
-        s->as.array.dim_count = dml->size;
-        s->as.array.dims = dml->dims;
+    // Types do not implicitly convert
+    if (VARDECL_INIT(node) != NULL && ct_to_vt(VARDECL_TYPE(node), is_array) != LAST_TYPE) {
+        HAD_ERROR = true;
+        USER_ERROR("Variable of type %s was initialised with expression of type %s",
+            vt_to_str(ct_to_vt(VARDECL_TYPE(node), is_array)),
+            vt_to_str(LAST_TYPE));
     }
 
-    // Clean up
-    DLSpop(DLS);
+    // TODO: Allow scalar to init array
 
     TRAVnext(node);
     return node;
@@ -997,32 +1061,30 @@ node_st *CTAvarlet(node_st *node)
     // Handle case of missing symbol
     HANDLE_MISSING_SYMBOL(name, s);
 
-    // Find dimensions
-    handle_array_dims_exprs_for_indices_macro(node);
+    // Find dimensions, represented as Exprs
+    node_st* first_expr = VARLET_INDICES(node);
+    const size_t n_dims = count_exprs(first_expr);
 
-    const DimsList* dml = DLSpeekTop(DLS);
-    const bool is_array = dml->size > 0;
+    const bool is_array = n_dims > 0;
 
     if (is_array) {
-        // Ensure symbol is array
+        // Typecheck is symbol is indeed declared as an array
         if (!IS_ARRAY(s->vtype)) {
             HAD_ERROR = true;
             USER_ERROR("Identifier %s was indexed, but is not an array", name);
         }
 
-        // Confirm dimensions are correct
-        if (s->as.array.dim_count != dml->size) {
+        // Ensure dimensions match
+        if (s->as.array.dim_count != n_dims) {
             HAD_ERROR = true;
-            USER_ERROR("Expected array dimension count is %lu but got %lu", s->as.array.dim_count, dml->size);
+            USER_ERROR("Expected array dimension count is %lu but got %lu", s->as.array.dim_count, n_dims);
         }
 
+        // Demote array since it's indexed and stores a single value
         LAST_TYPE = demote_array_type(s->vtype);
     } else {
         LAST_TYPE = s->vtype;
     }
-
-    // Clean up
-    DLSpop(DLS);
 
     return node;
 }
@@ -1042,34 +1104,33 @@ node_st *CTAvar(node_st *node)
     // Handle case of missing symbol
     HANDLE_MISSING_SYMBOL(name, s);
 
-    // Find dimensions
-    handle_array_dims_exprs_for_indices_macro(node);
+    // Find dimensions, represented as Exprs
+    node_st* first_expr = VAR_INDICES(node);
+    const size_t n_dims = count_exprs(first_expr);
 
-    const DimsList* dml = DLSpeekTop(DLS);
-    const bool is_array = dml->size > 0;
+    const bool is_array = n_dims > 0;
 
     if (is_array) {
-        // Ensure symbol is array
+        // Typecheck is symbol is indeed declared as an array
         if (!IS_ARRAY(s->vtype)) {
             HAD_ERROR = true;
             USER_ERROR("Identifier %s was indexed, but is not an array", name);
         }
 
-        // Confirm dimensions are correct
-        if (s->as.array.dim_count != dml->size) {
+        // Ensure dimensions match
+        if (s->as.array.dim_count != n_dims) {
             HAD_ERROR = true;
-            USER_ERROR("Expected array dimension count is %lu but got %lu", s->as.array.dim_count, dml->size);
+            USER_ERROR("Expected array dimension count is %lu but got %lu", s->as.array.dim_count, n_dims);
         }
 
+        // Demote array since it's indexed and retrieves a single value
         LAST_TYPE = demote_array_type(s->vtype);
     } else {
         LAST_TYPE = s->vtype;
     }
 
-    // Clean up
-    DLSpop(DLS);
-
-    // Add symbol to AST
+    // Add symbol to AST to retrieve in bytecode
+    // Ensures correct variable shadowing and use-before-declaration
     VAR_SYMBOL(node) = s;
 
     return node;

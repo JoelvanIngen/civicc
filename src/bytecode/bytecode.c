@@ -81,6 +81,60 @@ char* generate_label_name(char* name) {
     return safe_concat_str(res, name);
 }
 
+/**
+ * Pushes all array dimensions onto the stack
+ * @param arr array whose dimensions to push onto stack
+ */
+static void push_array_with_dims(const Symbol* arr) {
+    for (size_t i = 0; i < arr->as.array.dim_count; i++) {
+        const Symbol* dim = arr->as.array.dims[i];
+
+        char* instr;
+        char* offset_str = int_to_str((int) dim->offset);
+        if (dim->imported) {
+            instr = "iloade";
+        } else if (dim->offset == 0) {
+            instr = "iloadg";
+        } else if (arr->parent_scope->nesting_level == CURRENT_SCOPE->nesting_level) {
+            instr = "iload";
+        } else {
+            instr = "iloadn";
+            char* nesting_diff_str = int_to_str((int) CURRENT_SCOPE->nesting_level - arr->parent_scope->nesting_level);
+            Instr(instr, nesting_diff_str, offset_str, NULL);
+
+            MEMfree(nesting_diff_str);
+            MEMfree(offset_str);
+            // Skip rest of the loop due to differing instruction format
+            continue;
+        }
+
+        Instr(instr, offset_str, NULL, NULL);
+        MEMfree(offset_str);
+    }
+
+    char* instr;
+    char* offset_str = int_to_str((int) arr->offset);
+    if (arr->imported) {
+        instr = "aloade";
+    } else if (arr->offset == 0) {
+        instr = "aloadg";
+    } else if (arr->parent_scope->nesting_level == CURRENT_SCOPE->nesting_level) {
+        instr = "aload";
+    } else {
+        instr = "aloadn";
+        char* nesting_diff_str = int_to_str((int) CURRENT_SCOPE->nesting_level - arr->parent_scope->nesting_level);
+        Instr(instr, nesting_diff_str, offset_str, NULL);
+
+        MEMfree(nesting_diff_str);
+        MEMfree(offset_str);
+        // Return due to differing instruction format
+        return;
+    }
+
+    Instr(instr, offset_str, NULL, NULL);
+    MEMfree(offset_str);
+}
+
 static void init() {
     CURRENT_SCOPE = GB_GLOBAL_SCOPE;
 }
@@ -240,7 +294,6 @@ node_st *BCfuncall(node_st *node)
 
     const size_t current_level = CURRENT_SCOPE->parent_fun->parent_scope->nesting_level;
     const size_t fun_level = s->parent_scope->nesting_level;
-    const size_t fun_offset = s->offset;
 
     if (fun_level == 0) {
         // Global function
@@ -493,6 +546,7 @@ node_st *BCfunbody(node_st *node)
     Label(label_name, true);
 
     // Only write "esr" if at least one variable (NOT PARAMETER) will be initialised
+    // TODO: Prevent "esr" if argument is array with dims
     if (CURRENT_SCOPE->localvar_offset_counter
         - CURRENT_SCOPE->parent_fun->as.fun.param_count > 0) {
 
@@ -827,6 +881,8 @@ node_st *BCparam(node_st *node)
 {
     TRAVchildren(node);
 
+
+
     /**
      * Variable as specified in funcall argument might already be on stack?
      * !!! Check this because I actually have no clue
@@ -1153,7 +1209,7 @@ node_st *BCvarlet(node_st *node)
         // TODO: ARRAYS
         default:  // Should not occur
 #ifdef DEBUGGING
-            ERROR("Incompatible Varlet node with valuetype of %i", s->vtype);
+            ERROR("Incompatible Varlet node with valuetype of %s", vt_to_str(s->vtype));
 #endif // DEBUGGING
     }
 
@@ -1220,62 +1276,78 @@ node_st *BCvar(node_st *node)
     const size_t var_offset = s->offset;
 
     char* instr = NULL;
-    switch (s->vtype) {
-        case VT_NUM: instr = STRcpy("i"); LAST_TYPE = VT_NUM; break;
-        case VT_FLOAT: instr = STRcpy("f"); LAST_TYPE = VT_FLOAT; break;
-        case VT_BOOL: instr = STRcpy("b"); LAST_TYPE = VT_BOOL; break;
-        // TODO: ARRAYS
-        default:  // Should not occur
+
+    // Scalars
+    if (!IS_ARRAY(s->vtype)) {
+        switch (s->vtype) {
+            case VT_NUM: instr = STRcpy("i"); LAST_TYPE = VT_NUM; break;
+            case VT_FLOAT: instr = STRcpy("f"); LAST_TYPE = VT_FLOAT; break;
+            case VT_BOOL: instr = STRcpy("b"); LAST_TYPE = VT_BOOL; break;
+            // TODO: ARRAYS
+            default:  // Should not occur
 #ifdef DEBUGGING
-            ERROR("Incompatible Var node with valuetype of %i", s->vtype);
+                ERROR("Incompatible Var node with valuetype of %s", vt_to_str(s->vtype));
 #endif // DEBUGGING
             break;
-    }
-
-    if (var_level == 0) {
-        if (s->imported) {
-            instr = safe_concat_str(instr, STRcpy("loade"));
-        } else {
-            instr = safe_concat_str(instr, STRcpy("loadg"));
         }
 
-        char* var_offset_str = int_to_str((int) var_offset);
-        Instr(instr, var_offset_str, NULL, NULL);
-        MEMfree(var_offset_str);
-    }
-
-    else if (current_level == var_level) {
-        instr = safe_concat_str(instr, STRcpy("load"));
-        if (var_offset <= 3) {
-            switch (s->offset) {
-                case 0: instr = safe_concat_str(instr, STRcpy("_0")); break;
-                case 1: instr = safe_concat_str(instr, STRcpy("_1")); break;
-                case 2: instr = safe_concat_str(instr, STRcpy("_2")); break;
-                case 3: instr = safe_concat_str(instr, STRcpy("_3")); break;
-                default:  // Should never happen
-#ifdef DEBUGGING
-                    ERROR("Var with offset %lu was deemed to be within 0 and 3 inclusive", var_offset);
-#endif // DEBUGGING
+        if (var_level == 0) {
+            if (s->imported) {
+                instr = safe_concat_str(instr, STRcpy("loade"));
+            } else {
+                instr = safe_concat_str(instr, STRcpy("loadg"));
             }
-            Instr(instr, NULL, NULL, NULL);
-        } else {
+
             char* var_offset_str = int_to_str((int) var_offset);
             Instr(instr, var_offset_str, NULL, NULL);
             MEMfree(var_offset_str);
         }
+
+        else if (current_level == var_level) {
+            instr = safe_concat_str(instr, STRcpy("load"));
+            if (var_offset <= 3) {
+                switch (s->offset) {
+                    case 0: instr = safe_concat_str(instr, STRcpy("_0")); break;
+                    case 1: instr = safe_concat_str(instr, STRcpy("_1")); break;
+                    case 2: instr = safe_concat_str(instr, STRcpy("_2")); break;
+                    case 3: instr = safe_concat_str(instr, STRcpy("_3")); break;
+                    default:  // Should never happen
+#ifdef DEBUGGING
+                        ERROR("Var with offset %lu was deemed to be within 0 and 3 inclusive", var_offset);
+#endif // DEBUGGING
+                }
+                Instr(instr, NULL, NULL, NULL);
+            } else {
+                char* var_offset_str = int_to_str((int) var_offset);
+                Instr(instr, var_offset_str, NULL, NULL);
+                MEMfree(var_offset_str);
+            }
+        }
+
+        else {
+#ifdef DEBUGGING
+            ASSERT_MSG((current_level > var_level), "Calling variable from higher scope %lu compared to own scope %lu",
+                var_level, current_level);
+#endif // DEBUGGING
+            instr = safe_concat_str(instr, STRcpy("loadn"));
+            char* delta_offset_str = int_to_str((int) (current_level - var_level));
+            char* var_offset_str = int_to_str((int) var_offset);
+            Instr(instr, delta_offset_str, var_offset_str, NULL);
+            MEMfree(delta_offset_str);
+            MEMfree(var_offset_str);
+        }
+
+        LAST_TYPE = s->vtype;
     }
 
+    // Arrays
     else {
-#ifdef DEBUGGING
-        ASSERT_MSG((current_level > var_level), "Calling variable from higher scope %lu compared to own scope %lu",
-            var_level, current_level);
-#endif // DEBUGGING
-        instr = safe_concat_str(instr, STRcpy("loadn"));
-        char* delta_offset_str = int_to_str((int) (current_level - var_level));
-        char* var_offset_str = int_to_str((int) var_offset);
-        Instr(instr, delta_offset_str, var_offset_str, NULL);
-        MEMfree(delta_offset_str);
-        MEMfree(var_offset_str);
+        // Load int values of array dims and push array reference itself
+        push_array_with_dims(s);
+
+        // TODO: Handle indexed array
+
+        LAST_TYPE = s->vtype;
     }
 
     MEMfree(instr);

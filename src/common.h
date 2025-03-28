@@ -52,4 +52,5 @@ char* bo_to_str(enum BinOpType op);
 char* mo_to_str(enum MonOpType op);
 char* float_to_str(float f);
 char* int_to_str(int i);
+ValueType demote_array_type(ValueType array_type);
 char* safe_concat_str(char* s1, char* s2);
