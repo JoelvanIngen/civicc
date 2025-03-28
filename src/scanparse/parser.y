@@ -362,16 +362,27 @@ vardecls: vardecls vardecl
           $$ = NULL;
         }
 
-vardecl: type[t] ID[name] opt_expr_indices[indices] SEMICOLON
+// Do not use opt_expr_indices here, since while it works for varlet and var,
+// it somehow causes conflicts here
+vardecl: type[t] SBRACKET_L exprs[e] SBRACKET_R ID[name] SEMICOLON
         {
           $$ = ASTvardecl($name, $t);
-          VARDECL_DIMS($$) = $indices;
+          VARDECL_DIMS($$) = $e;
         }
-       | type[t] ID[name] opt_expr_indices[indices] LET expr[init] SEMICOLON
+       | type[t] SBRACKET_L exprs[e] SBRACKET_R ID[name] LET expr[init] SEMICOLON
         {
           $$ = ASTvardecl($name, $t);
           VARDECL_INIT($$) = $init;
-          VARDECL_DIMS($$) = $indices;
+          VARDECL_DIMS($$) = $e;
+        }
+       | type[t] ID[name] SEMICOLON
+        {
+          $$ = ASTvardecl($name, $t);
+        }
+       | type[t] ID[name] LET expr[init] SEMICOLON
+        {
+          $$ = ASTvardecl($name, $t);
+          VARDECL_INIT($$) = $init;
         }
         ;
 
