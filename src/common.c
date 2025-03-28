@@ -110,3 +110,12 @@ char* safe_concat_str(char* s1, char* s2) {
     MEMfree(s2);
     return buf;
 }
+
+char* generate_array_dim_name(const char* parent_name, const size_t i) {
+    return safe_concat_str(
+            safe_concat_str(
+                safe_concat_str(STRcpy("_index"),
+                    int_to_str((int) i)),
+                    STRcpy("_")),
+                STRcpy(parent_name));
+}

@@ -86,15 +86,6 @@ static bool name_exists_in_top_scope(char* name) {
     return STlookup(CURRENT_SCOPE, name) != NULL;
 }
 
-static char* create_array_dim_name(const char* parent_name, const size_t i) {
-    return safe_concat_str(
-            safe_concat_str(
-                safe_concat_str(STRcpy("_index"),
-                    int_to_str((int) i)),
-                    STRcpy("_")),
-                STRcpy(parent_name));
-}
-
 static size_t count_exprs(node_st* exprs_node) {
     size_t count = 0;
 
@@ -172,7 +163,7 @@ static Symbol** get_exprs(node_st* id_node, const char* parent_name, const size_
     Symbol** ids = MEMmalloc(sizeof(Symbol*) * count);
 
     for (size_t i = 0; i < count; i++) {
-        char* name = create_array_dim_name(parent_name, i);
+        char* name = generate_array_dim_name(parent_name, i);
         Symbol* s = SBfromVar(name, VT_NUM, orig == IMPORTED_ORIGIN);
         ids[i] = s;
 
@@ -211,7 +202,7 @@ static size_t count_param_dims(node_st* param_node) {
 static void find_param_types(node_st* param_node, const Symbol* s, const size_t param_count) {
     for (size_t i = 0; i < param_count; i++) {
         const size_t n_ids = count_ids(PARAM_DIMS(param_node));
-        
+
         // Add dimensions before array
         for (size_t j = 0; j < n_ids; j++) {
             s->as.fun.param_types[i] = VT_NUM;

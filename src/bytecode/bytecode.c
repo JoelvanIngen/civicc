@@ -18,6 +18,12 @@
 #include "symbol/scopetree.h"
 #include "symbol/table.h"
 
+typedef enum Origin {
+    GLOBAL_ORIGIN,
+    LOCAL_ORIGIN,
+    IMPORTED_ORIGIN,
+} Origin;
+
 static FILE* ASM_FILE;
 static Assembly ASM;
 
@@ -808,12 +814,21 @@ node_st *BCglobdecl(node_st *node)
     // Add to import list
     char* name = GLOBDECL_NAME(node);
     const Symbol* var_symbol = ScopeTreeFind(CURRENT_SCOPE, name);
+
+    // Add dims before array
+    if (var_symbol->stype == ST_ARRAYVAR) {
+        char* num_str = vt_to_str(VT_NUM);
+        for (size_t i = 0; i < var_symbol->as.array.dim_count; i++) {
+            char* id_name = generate_array_dim_name(name, i);
+            ASMemitVarImport(&ASM, id_name, num_str);
+            MEMfree(id_name);
+        }
+    }
+
     ASMemitVarImport(
         &ASM,
         name,
         vt_to_str(var_symbol->vtype));
-
-    TRAVchildren(node);
 
     /**
      * Save to imported variables stack

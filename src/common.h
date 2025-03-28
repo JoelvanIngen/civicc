@@ -54,3 +54,4 @@ char* float_to_str(float f);
 char* int_to_str(int i);
 ValueType demote_array_type(ValueType array_type);
 char* safe_concat_str(char* s1, char* s2);
+char* generate_array_dim_name(const char* parent_name, size_t i);
