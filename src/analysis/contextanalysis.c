@@ -821,7 +821,7 @@ node_st *CTAparam(node_st *node)
     const ValueType type = ct_to_vt(PARAM_TYPE(node), is_array);
     Symbol* s;
     if (is_array) {
-        s = SBfromArray(name, type, true);
+        s = SBfromArray(name, type, false);
 
         // Create symbols for all index variables
         Symbol** ids = get_ids(first_id, n_dims, LOCAL_ORIGIN);
@@ -1044,6 +1044,8 @@ node_st *CTAvarlet(node_st *node)
 {
     // Note: Requires array support
 
+    TRAVchildren(node);
+
     char* name = VARLET_NAME(node);
 
     // Look up variable
@@ -1086,6 +1088,8 @@ node_st *CTAvarlet(node_st *node)
 node_st *CTAvar(node_st *node)
 {
     // Note: Requires array support
+
+    TRAVchildren(node);
 
     char* name = VAR_NAME(node);
 

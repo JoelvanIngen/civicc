@@ -88,6 +88,51 @@ char* generate_label_name(char* name) {
 }
 
 /**
+ * Loads the correct array reference to the stack
+ * @param arr array to load reference
+ */
+static void load_array_ref(const Symbol* arr) {
+    printf("ARRAY IMPORTED: %i\n", arr->imported);
+    char* offset_str = int_to_str((int) arr->offset);
+    if (arr->imported) {
+        Instr("aloade", offset_str, NULL, NULL);
+    } else if (arr->parent_scope->nesting_level == 0) {
+        Instr("aloadg", offset_str, NULL, NULL);
+    } else if (arr->parent_scope->nesting_level == CURRENT_SCOPE->nesting_level) {
+        Instr("aload", offset_str, NULL, NULL);
+    } else {
+        char* nesting_diff_str = int_to_str((int) CURRENT_SCOPE->nesting_level - arr->parent_scope->nesting_level);
+        Instr("aloadn", nesting_diff_str, offset_str, NULL);
+        MEMfree(nesting_diff_str);
+    }
+    MEMfree(offset_str);
+}
+
+static void store_array_ref_with_value(const Symbol* arr) {
+    switch (arr->vtype) {
+        case VT_NUMARRAY: Instr("istorea", NULL, NULL, NULL); break;
+        case VT_FLOATARRAY: Instr("fstorea", NULL, NULL, NULL); break;
+        case VT_BOOLARRAY: Instr("bstorea", NULL, NULL, NULL); break;
+        default:
+#ifdef DEBUGGING
+            ERROR("Unexpected array vtype %s", vt_to_str(arr->vtype));
+#endif // DEBUGGING
+    }
+}
+
+static void load_array_ref_with_value(const Symbol* arr) {
+    switch (arr->vtype) {
+        case VT_NUMARRAY: Instr("iloada", NULL, NULL, NULL); break;
+        case VT_FLOATARRAY: Instr("floada", NULL, NULL, NULL); break;
+        case VT_BOOLARRAY: Instr("bloada", NULL, NULL, NULL); break;
+        default:
+#ifdef DEBUGGING
+            ERROR("Unexpected array vtype %s", vt_to_str(arr->vtype));
+#endif // DEBUGGING
+    }
+}
+
+/**
  * Pushes single dimension value onto the stack
  * @param dim dim symbol to push
  */
@@ -115,8 +160,8 @@ static void push_array_dim(const Symbol* dim) {
     MEMfree(offset_str);
 }
 
-static void push_array_dims(const Symbol* arr) {
-    for (size_t i = 0; i < arr->as.array.dim_count; i++) {
+static void push_array_dims(const Symbol* arr, const size_t start) {
+    for (size_t i = start; i < arr->as.array.dim_count; i++) {
         const Symbol* dim = arr->as.array.dims[i];
 
         push_array_dim(dim);
@@ -156,7 +201,7 @@ static void store_array_dim(const Symbol* dim) {
  * @param arr array whose dimensions to push onto stack
  */
 static void push_array_with_dims(const Symbol* arr) {
-    push_array_dims(arr);
+    push_array_dims(arr, 0);
 
     char* instr;
     char* offset_str = int_to_str((int) arr->offset);
@@ -203,6 +248,24 @@ static void fill_array_dims(const Symbol* arr, node_st* exprs_node) {
     }
 }
 
+static void flatten_dim_exprs(const Symbol* arr, node_st* exprs_node) {
+    for (size_t i = 0; i < arr->as.array.dim_count; i++) {
+        // Find index
+        TRAVexpr(exprs_node);
+
+        // Multiply index with mul-result of all next dim sizes for flattening
+        if (i < arr->as.array.dim_count - 1) {
+            push_array_dims(arr, i + 1);
+            for (size_t j = i; j < arr->as.array.dim_count; j++) Instr("imul", NULL, NULL, NULL);
+        }
+
+        // Add together with prev size
+        if (i != 0) Instr("iadd", NULL, NULL, NULL);
+
+        exprs_node = EXPRS_NEXT(exprs_node);
+    }
+}
+
 /**
  * Instantiates an array in bytecode. Pushes its dimensions,
  * which must already have been saved, and then multiplies
@@ -212,7 +275,7 @@ static void fill_array_dims(const Symbol* arr, node_st* exprs_node) {
  */
 static void create_array_with_size(const Symbol* arr) {
     // Push all values
-    push_array_dims(arr);
+    push_array_dims(arr, 0);
 
     // Push n_values - 1 imul instructions
     for (size_t i = 0; i < arr->as.array.dim_count - 1; i++) Instr("imul", NULL, NULL, NULL);
@@ -1320,12 +1383,27 @@ node_st *BCmonop(node_st *node)
  */
 node_st *BCvarlet(node_st *node)
 {
-    TRAVchildren(node);
-
+    // Find symbol for varlet
     const Symbol* s = ScopeTreeFind(CURRENT_SCOPE, VARLET_NAME(node));
 #ifdef DEBUGGING
     ASSERT_MSG((s != NULL), "BYTECODE: Could not find symbol named %s", VARLET_NAME(node));
 #endif // DEBUGGING
+
+    if (s->stype == ST_ARRAYVAR) {
+        // Value should already be at stack
+
+        // Push index onto stack (flatten multidim into single scalar)
+        flatten_dim_exprs(s, VARLET_INDICES(node));
+
+        // Push array reference onto stack
+        load_array_ref(s);
+
+        // Store value to index of array
+        store_array_ref_with_value(s);
+
+        // Return (don't run scalar instructions)
+        return node;
+    }
 
     size_t current_level = CURRENT_SCOPE->nesting_level;
     size_t var_level = s->parent_scope->nesting_level;
@@ -1393,13 +1471,29 @@ node_st *BCvarlet(node_st *node)
  */
 node_st *BCvar(node_st *node)
 {
-    TRAVchildren(node);
-
     // Retrieve var symbol from AST
     const Symbol* s = VAR_SYMBOL(node);
 #ifdef DEBUGGING
-    ASSERT_MSG((s != NULL), "BYTECODE: Could not find symbol named %s", VAR_NAME(node));
+    ASSERT_MSG((s != NULL), "BYTECODE: Could not find symbol named %s in function %s",
+        VAR_NAME(node), CURRENT_SCOPE->parent_fun->name);
 #endif // DEBUGGING
+
+    if (s->stype == ST_ARRAYVAR) {
+        // Do nothing if not indexed (function argument or similar)
+        if (VAR_INDICES(node) == NULL) return node;
+
+        // Push index onto stack (flatten multidim into single scalar)
+        flatten_dim_exprs(s, VAR_INDICES(node));
+
+        // Push array reference onto stack
+        load_array_ref(s);
+
+        // Store value to index of array
+        load_array_ref_with_value(s);
+
+        // Return (don't run scalar instructions)
+        return node;
+    }
 
     const size_t current_level = CURRENT_SCOPE->nesting_level;
     const size_t var_level = s->parent_scope->nesting_level;
