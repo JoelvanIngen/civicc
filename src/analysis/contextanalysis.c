@@ -131,7 +131,6 @@ static size_t count_params(node_st* param_node) {
 }
 
 static Symbol** get_ids(node_st* id_node, const size_t count, const Origin orig) {
-    // TODO: Error on name collision
     Symbol** ids = MEMmalloc(sizeof(Symbol*) * count);
 
     for (size_t i = 0; i < count; i++) {
@@ -825,6 +824,9 @@ node_st *CTAparam(node_st *node)
 
         // Create symbols for all index variables
         Symbol** ids = get_ids(first_id, n_dims, LOCAL_ORIGIN);
+
+        // Once again check for duplicate ID, since array size ID might have same name as array
+        HANDLE_DUPLICATE_ID(name);
 
         s->as.array.dim_count = n_dims;
         s->as.array.dims = ids;
