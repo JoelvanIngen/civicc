@@ -157,7 +157,7 @@ static Symbol** get_ids(node_st* id_node, const size_t count, const Origin orig)
     return ids;
 }
 
-static Symbol** get_exprs(node_st* id_node, const char* parent_name, const size_t count, const Origin orig,
+static Symbol** get_exprs(node_st* exprs_node, const char* parent_name, const size_t count, const Origin orig,
     const ValueType require_type) {
 
     Symbol** ids = MEMmalloc(sizeof(Symbol*) * count);
@@ -175,13 +175,13 @@ static Symbol** get_exprs(node_st* id_node, const char* parent_name, const size_
             case GLOBAL_ORIGIN: s->offset = GLOBAL_VAR_OFFSET++; break;
         }
 
-        TRAVexprs(id_node);
+        TRAVexpr(exprs_node);
         if (require_type != VT_NULL && require_type != LAST_TYPE) {
             HAD_ERROR = true;
             USER_ERROR("Type mismatch; expected %s but got %s", vt_to_str(require_type), vt_to_str(LAST_TYPE));
         }
 
-        id_node = IDS_NEXT(id_node);
+        exprs_node = EXPRS_NEXT(exprs_node);
         MEMfree(name);
     }
 
