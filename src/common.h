@@ -22,7 +22,7 @@
 #define INITIAL_LIST_SIZE 5
 #define MAX_STR_LEN 100
 
-#define DEBUGGING true
+#define DEBUGGING false
 
 /* Error with debug information for developing civic */
 #define ERROR(fmt, ...) do { \
