@@ -378,9 +378,6 @@ node_st *CTAdecls(node_st *node)
  */
 node_st *CTAexprs(node_st *node)
 {
-    // TODO: If we're being smart (like with counting IDs, we can probably get rid
-    // of the SAVING_ARGS flag?
-
     // Track since array indexing requires integers as last type
     const bool was_indexing_array = INDEXING_ARRAY;
 
@@ -414,13 +411,6 @@ node_st *CTAarrexpr(node_st *node)
  */
 node_st *CTAids(node_st *node)
 {
-    // char* name = IDS_NAME(node);
-    //
-    // // Add name to scope as type integer
-    // // TODO: Add to scope as symbol
-    // // TODO: Add offset
-    // STinsert(CURRENT_SCOPE, name, VT_NUM);
-
     TRAVchildren(node);
     return node;
 }
@@ -514,16 +504,6 @@ node_st *CTAfuncall(node_st *node)
             USER_ERROR("Argument type %s and parameter type %s don't match",
                 vt_to_str(types[i]), vt_to_str(param_types[i]));
         }
-
-        // TODO: Re-introduce this size check when I figure out how
-        // if (IS_ARRAY(types[i])) {
-        //     // Compare argument dimensions vs expected parameter dimensions
-        //     if (args[i].arr_dim_count != param_dim_counts[i]) {
-        //         HAD_ERROR = true;
-        //         USER_ERROR("Argument has %lu dimensions, but function parameter expects %lu",
-        //             args[i].arr_dim_count, param_dim_counts[i]);
-        //     }
-        // }
     }
 
     MEMfree(types);
@@ -862,8 +842,6 @@ node_st *CTAglobdef(node_st *node)
             vt_to_str(LAST_TYPE));
     }
 
-    // TODO: Allow scalar to init array
-
     return node;
 }
 
@@ -979,8 +957,6 @@ node_st *CTAvardecl(node_st *node)
             vt_to_str(ct_to_vt(VARDECL_TYPE(node), is_array)),
             vt_to_str(LAST_TYPE));
     }
-
-    // TODO: Allow scalar to init array
 
     TRAVnext(node);
     return node;

@@ -628,10 +628,6 @@ node_st *BCarrexpr(node_st *node)
 node_st *BCids(node_st *node)
 {
     TRAVchildren(node);
-
-    /**
-     * TODO: No idea
-     */
     return node;
 }
 
@@ -944,7 +940,6 @@ node_st *BCfunbody(node_st *node)
     Label(label_name, true);
 
     // Only write "esr" if at least one variable (NOT PARAMETER) will be initialised
-    // TODO: Prevent "esr" if argument is array with dims
     if (CURRENT_SCOPE->localvar_offset_counter
         - CURRENT_SCOPE->parent_fun->as.fun.param_count > 0) {
 
@@ -1339,8 +1334,6 @@ node_st *BCparam(node_st *node)
  */
 node_st *BCvardecl(node_st *node)
 {
-    // TODO: Array support
-
     // Look up symbol and variabletype
     char* name = VARDECL_NAME(node);
     const Symbol* s = STlookup(CURRENT_SCOPE, name);
@@ -1393,7 +1386,6 @@ node_st *BCvardecl(node_st *node)
         case VT_NUM: instr = STRcpy("i"); LAST_TYPE = VT_NUM; break;
         case VT_FLOAT: instr = STRcpy("f"); LAST_TYPE = VT_FLOAT; break;
         case VT_BOOL: instr = STRcpy("b"); LAST_TYPE = VT_BOOL; break;
-        // TODO: ARRAYS
         default:  // Should not occur
 #ifdef DEBUGGING
             ERROR("Incompatible Vardecl node with valuetype of %i", s->vtype);
@@ -1694,7 +1686,6 @@ node_st *BCvarlet(node_st *node)
         case VT_NUM: instr = STRcpy("i"); LAST_TYPE = VT_NUM; break;
         case VT_FLOAT: instr = STRcpy("f"); LAST_TYPE = VT_FLOAT; break;
         case VT_BOOL: instr = STRcpy("b"); LAST_TYPE = VT_BOOL; break;
-        // TODO: ARRAYS
         default:  // Should not occur
 #ifdef DEBUGGING
             ERROR("Incompatible Varlet node with valuetype of %s", vt_to_str(s->vtype));
@@ -1792,7 +1783,6 @@ node_st *BCvar(node_st *node)
             case VT_NUM: instr = STRcpy("i"); LAST_TYPE = VT_NUM; break;
             case VT_FLOAT: instr = STRcpy("f"); LAST_TYPE = VT_FLOAT; break;
             case VT_BOOL: instr = STRcpy("b"); LAST_TYPE = VT_BOOL; break;
-            // TODO: ARRAYS
             default:  // Should not occur
 #ifdef DEBUGGING
                 ERROR("Incompatible Var node with valuetype of %s", vt_to_str(s->vtype));
@@ -1851,9 +1841,7 @@ node_st *BCvar(node_st *node)
     // Arrays
     else {
         // Load int values of array dims and push array reference itself
-        push_array_with_dims(s);  // TODO: This doesn't do what I hope it does
-
-        // TODO: Handle indexed array
+        push_array_with_dims(s);
 
         LAST_TYPE = s->vtype;
     }
