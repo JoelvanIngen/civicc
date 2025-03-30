@@ -100,7 +100,7 @@ static size_t count_exprs(node_st* exprs_node) {
         count++;
         if (NODE_TYPE(EXPRS_EXPR(exprs_node)) == NT_VAR) {
             node_st* var_node = EXPRS_EXPR(exprs_node);
-            Symbol* var_symbol = ScopeTreeFind(CURRENT_SCOPE, VAR_NAME(var_node));
+            const Symbol* var_symbol = ScopeTreeFind(CURRENT_SCOPE, VAR_NAME(var_node));
             if (var_symbol == NULL) {
                 HAD_ERROR = true;
                 ERROR("Cannot find variable named %s", VAR_NAME(var_node));
@@ -271,7 +271,7 @@ static ValueType* find_funcall_types(node_st* exprs_node, const size_t count) {
 #ifdef DEBUGGING
             ASSERT_MSG((var_node != NULL), "Exprs_expr was found to be a var, but node wasn't retrieved");
 #endif // DEBUGGING
-            Symbol* var_symbol = ScopeTreeFind(CURRENT_SCOPE, VAR_NAME(var_node));
+            const Symbol* var_symbol = ScopeTreeFind(CURRENT_SCOPE, VAR_NAME(var_node));
             if (var_symbol == NULL) {
                 HAD_ERROR = true;
                 USER_ERROR("Cannot find variable named %s", VAR_NAME(var_node));

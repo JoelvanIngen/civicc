@@ -474,7 +474,7 @@ static void init_array_with_scalar(const Symbol* arr) {
 static size_t count_arrexpr(node_st* node) {
     size_t count = 0;
 
-    enum ccn_nodetype type = NODE_TYPE(node);
+    const enum ccn_nodetype type = NODE_TYPE(node);
 
     if (type == NT_ARREXPR) {
         return count_arrexpr(ARREXPR_EXPRS(node));
@@ -1089,7 +1089,7 @@ node_st *BCfor(node_st *node)
 #ifdef DEBUGGING
     ASSERT_MSG((LAST_TYPE == VT_NUM), "Got a non-integer value for loop start expression");
 #endif // DEBUGGING
-    Symbol* s_counter = STlookup(CURRENT_SCOPE, name);
+    const Symbol* s_counter = STlookup(CURRENT_SCOPE, name);
     char* loop_offset_str = int_to_str((int) s_counter->offset);
     Instr("istore", loop_offset_str, NULL, NULL);
 
@@ -1097,7 +1097,7 @@ node_st *BCfor(node_st *node)
 #ifdef DEBUGGING
     ASSERT_MSG((LAST_TYPE == VT_NUM), "Got a non-integer value for loop stop condition");
 #endif // DEBUGGING
-    Symbol* s_cond = STlookup(CURRENT_SCOPE, "_cond");
+    const Symbol* s_cond = STlookup(CURRENT_SCOPE, "_cond");
     char* cond_offset_str = int_to_str((int) s_cond->offset);
     Instr("istore", cond_offset_str, NULL, NULL);
 
@@ -1105,7 +1105,7 @@ node_st *BCfor(node_st *node)
 #ifdef DEBUGGING
     ASSERT_MSG((LAST_TYPE == VT_NUM), "Got a non-integer value for loop step expression");
 #endif // DEBUGGING
-    Symbol* s_step = STlookup(CURRENT_SCOPE, "_step");
+    const Symbol* s_step = STlookup(CURRENT_SCOPE, "_step");
     char* step_offset_str = int_to_str((int) s_step->offset);
     Instr("istore", step_offset_str, NULL, NULL);
 
@@ -1235,7 +1235,7 @@ node_st *BCglobdecl(node_st *node)
 node_st *BCglobdef(node_st *node)
 {
     char* name = GLOBDEF_NAME(node);
-    Symbol* s = STlookup(CURRENT_SCOPE, name);
+    const Symbol* s = STlookup(CURRENT_SCOPE, name);
 #ifdef DEBUGGING
     ASSERT_MSG((s != NULL), "Bytecode: Couldn't find globdef symbol in scope");
 #endif // DEBUGGING
@@ -1253,7 +1253,7 @@ node_st *BCglobdef(node_st *node)
     if (GLOBDEF_EXPORT(node)) {
         if (s->stype == ST_ARRAYVAR) {
             for (size_t i = 0; i < s->as.array.dim_count; i++) {
-                Symbol* s_dim = s->as.array.dims[i];
+                const Symbol* s_dim = s->as.array.dims[i];
                 ASMemitVarExport(&ASM, s_dim->name, s_dim->offset);
             }
         }
@@ -1379,9 +1379,9 @@ node_st *BCvardecl(node_st *node)
         }
     }
 
-    size_t current_level = CURRENT_SCOPE->nesting_level;
-    size_t var_level = s->parent_scope->nesting_level;
-    size_t var_offset = s->offset;
+    const size_t current_level = CURRENT_SCOPE->nesting_level;
+    const size_t var_level = s->parent_scope->nesting_level;
+    const size_t var_offset = s->offset;
 #ifdef DEBUGGING
     ASSERT_MSG((current_level == var_level),
         "BYTECODE: Symbol declaration %s, only found in different scope",
@@ -1485,8 +1485,9 @@ node_st *BCbinop(node_st *node)
         MEMfree(end_and_label);
 
         return node;
+    }
 
-    } else if (t == BO_or) {
+    if (t == BO_or) {
         // Short-circuit OR (||)
         char* short_circuit_label = generate_label_name(STRcpy("else"));
         char* end_or_label = generate_label_name(STRcpy("end"));
@@ -1684,9 +1685,9 @@ node_st *BCvarlet(node_st *node)
         return node;
     }
 
-    size_t current_level = CURRENT_SCOPE->nesting_level;
-    size_t var_level = s->parent_scope->nesting_level;
-    size_t var_offset = s->offset;
+    const size_t current_level = CURRENT_SCOPE->nesting_level;
+    const size_t var_level = s->parent_scope->nesting_level;
+    const size_t var_offset = s->offset;
 
     char* instr = NULL;
     switch (s->vtype) {
@@ -1796,7 +1797,6 @@ node_st *BCvar(node_st *node)
 #ifdef DEBUGGING
                 ERROR("Incompatible Var node with valuetype of %s", vt_to_str(s->vtype));
 #endif // DEBUGGING
-            break;
         }
 
         if (var_level == 0) {
@@ -1897,7 +1897,7 @@ node_st *BCnum(node_st *node)
             char* val_str = int_to_str(v);
 
             // Refer to existing constant if possible
-            ConstEntry res = ASMfindConstant(&ASM, val_str);
+            const ConstEntry res = ASMfindConstant(&ASM, val_str);
 
             char* const_count_str;
             if (res.get != NULL) {
@@ -1939,7 +1939,7 @@ node_st *BCfloat(node_st *node)
         char* val_str = float_to_str(v);
 
         // Refer to existing constant if possible
-        ConstEntry res = ASMfindConstant(&ASM, val_str);
+        const ConstEntry res = ASMfindConstant(&ASM, val_str);
 
         char* const_count_str;
         if (res.get != NULL) {

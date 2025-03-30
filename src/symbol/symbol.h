@@ -42,9 +42,9 @@ typedef struct Symbol {
 
 #define IS_ARRAY(vt) (vt == VT_NUMARRAY || vt == VT_FLOATARRAY || vt == VT_BOOLARRAY)
 
-Symbol* SBfromFun(char* name, ValueType vt, size_t param_count, bool imported);
-Symbol* SBfromArray(char* name, ValueType vt, bool imported);
-Symbol* SBfromVar(char* name, ValueType vt, bool imported);
-Symbol* SBfromForLoop(char* adjusted_name);
+Symbol* SBfromFun(const char* name, ValueType vt, size_t param_count, bool imported);
+Symbol* SBfromArray(const char* name, ValueType vt, bool imported);
+Symbol* SBfromVar(const char* name, ValueType vt, bool imported);
+Symbol* SBfromForLoop(const char* adjusted_name);
 void SBfree(Symbol** s_ptr);
 void SBaddDim(Symbol* s, size_t dim);

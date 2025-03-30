@@ -12,7 +12,7 @@
  * @param imported boolean that sets whether the identifier was imported from an external file
  * @return pointer to new symbol struct
  */
-static Symbol* SBnew(char* name, const ValueType vt, const bool imported) {
+static Symbol* SBnew(const char* name, const ValueType vt, const bool imported) {
     Symbol* s = MEMmalloc(sizeof(Symbol));
     s->vtype = vt;
     s->name = STRcpy(name);
@@ -30,7 +30,7 @@ static Symbol* SBnew(char* name, const ValueType vt, const bool imported) {
  * @param imported boolean that sets whether the function was imported from an external file
  * @return pointer to new symbol struct
  */
-Symbol* SBfromFun(char* name, const ValueType vt, const size_t param_count, const bool imported) {
+Symbol* SBfromFun(const char* name, const ValueType vt, const size_t param_count, const bool imported) {
     Symbol* s = SBnew(name, vt, imported);
     s->stype = ST_FUNCTION;
     s->as.fun.label_name = NULL;
@@ -48,7 +48,7 @@ Symbol* SBfromFun(char* name, const ValueType vt, const size_t param_count, cons
  * @param imported boolean that sets whether the array was imported from an external file
  * @return pointer to new symbol struct
  */
-Symbol* SBfromArray(char* name, const ValueType vt, const bool imported) {
+Symbol* SBfromArray(const char* name, const ValueType vt, const bool imported) {
     Symbol* s = SBnew(name, vt, imported);
     s->stype = ST_ARRAYVAR;
     s->as.array.dim_count = 0;
@@ -63,27 +63,28 @@ Symbol* SBfromArray(char* name, const ValueType vt, const bool imported) {
  * @param imported boolean that sets whether the variable was imported from an external file
  * @return pointer to new symbol struct
  */
-Symbol* SBfromVar(char* name, const ValueType vt, const bool imported) {
+Symbol* SBfromVar(const char* name, const ValueType vt, const bool imported) {
     Symbol* s = SBnew(name, vt, imported);
     s->stype = ST_VALUEVAR;
     return s;
 }
 
-Symbol* SBfromForLoop(char* adjusted_name) {
+/**
+ * Creates a new symbol for a for-loop. This is a special symbol, containing useless data but
+ * containing nested for-loop scope
+ * @param adjusted_name name adjusted for for-loops so it cannot collide with user-generated names
+ * @return pointer to new symbol struct
+ */
+Symbol* SBfromForLoop(const char* adjusted_name) {
     Symbol* s = SBnew(adjusted_name, VT_NULL, false);
     s->stype = ST_FORLOOP;
     return s;
 }
 
-/* Free symbol struct for function or array. Vars don't need
- * their struct members free. See SBfromVar.abort
- *
- * s_ptr: Is of type &(s*) used to remove dangling vars and free memory.
- *
- * Output: None
- * Side-effects: Memory is freed for *s and dangling variable is resolved
- * by setting *s = NULL.
-*/
+/**
+ * Frees a symbol struct and sets its pointer to NULL
+ * @param s_ptr double pointer to symbol struct to free
+ */
 void SBfree(Symbol** s_ptr) {
     Symbol* s = *s_ptr;
     switch (s->stype) {
