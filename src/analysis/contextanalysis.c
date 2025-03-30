@@ -98,8 +98,12 @@ static size_t count_exprs(node_st* exprs_node) {
                 HAD_ERROR = true;
                 ERROR("Cannot find variable named %s", VAR_NAME(var_node));
             }
+
             if (IS_ARRAY(var_symbol->vtype)) {
-                count += var_symbol->as.array.dim_count;
+                // Only add indices as parameters if array is not indexed
+                if (VAR_INDICES(var_node) == NULL) {
+                    count += var_symbol->as.array.dim_count;
+                }
             }
         }
         exprs_node = EXPRS_NEXT(exprs_node);
@@ -118,6 +122,11 @@ static size_t count_ids(node_st* ids_node) {
     return count;
 }
 
+/**
+ * Counts the amount of parameters. For any array, its dimension identifiers are also counted as a parameter.
+ * @param param_node starting parameter node
+ * @return amount of parameters
+ */
 static size_t count_params(node_st* param_node) {
     size_t count = 0;
 
@@ -209,6 +218,7 @@ static void find_param_types(node_st* param_node, const Symbol* s, const size_t 
         }
 
         s->as.fun.param_types[i] = ct_to_vt(PARAM_TYPE(param_node), n_ids > 0);
+
         param_node = PARAM_NEXT(param_node);
     }
 }
@@ -217,24 +227,46 @@ static ValueType* find_funcall_types(node_st* exprs_node, const size_t count) {
     ValueType* types = MEMmalloc(sizeof(ValueType) * count);
 
     for (size_t i = 0; i < count; i++) {
+#ifdef DEBUGGING
+        ASSERT_MSG((exprs_node != NULL), "Exprs node was NULL on iteration %lu", i);
+        ASSERT_MSG(EXPRS_EXPR(exprs_node), "Exprs_expr node was NULL on iteration %lu", i);
+#endif // DEBUGGING
+
         if (NODE_TYPE(EXPRS_EXPR(exprs_node)) == NT_VAR) {
             node_st* var_node = EXPRS_EXPR(exprs_node);
+#ifdef DEBUGGING
+            ASSERT_MSG((var_node != NULL), "Exprs_expr was found to be a var, but node wasn't retrieved");
+#endif // DEBUGGING
             Symbol* var_symbol = ScopeTreeFind(CURRENT_SCOPE, VAR_NAME(var_node));
             if (var_symbol == NULL) {
                 HAD_ERROR = true;
-                ERROR("Cannot find variable named %s", VAR_NAME(var_node));
+                USER_ERROR("Cannot find variable named %s", VAR_NAME(var_node));
                 return types;
             }
-            if (IS_ARRAY(var_symbol->vtype)) {
-                // Add indices before array
-                for (size_t j = 0; j < var_symbol->as.array.dim_count; j++) {
-                    types[i] = VT_NUM;
-                    i++;
-                }
-            }
 
-            TRAVexpr(exprs_node);
-            types[i] = var_symbol->vtype;
+            if (IS_ARRAY(var_symbol->vtype)) {
+                // Only add indices as parameters if array is not indexed
+                if (VAR_INDICES(var_node) == NULL) {
+                    // Add indices before array
+                    for (size_t j = 0; j < var_symbol->as.array.dim_count; j++) {
+                        types[i] = VT_NUM;
+                        i++;
+                    }
+
+                    TRAVexpr(exprs_node);
+
+                    // Add parameter type as array
+                    types[i] = var_symbol->vtype;
+                } else {
+                    TRAVexpr(exprs_node);
+
+                    // Array is demoted because it is indexed
+                    types[i] = demote_array_type(var_symbol->vtype);
+                }
+            } else {
+                TRAVexpr(exprs_node);
+                types[i] = var_symbol->vtype;
+            }
 
         } else {
             LAST_TYPE = VT_NULL;
@@ -439,7 +471,6 @@ node_st *CTAfuncall(node_st *node)
 
     // Arguments expected by function
     const ValueType* param_types = s->as.fun.param_types;
-    // const size_t* param_dim_counts = s->as.fun.param_dim_counts;
     const size_t params_len = s->as.fun.param_count;
 
     // Error if more arguments provided than parameters expected
@@ -467,7 +498,6 @@ node_st *CTAfuncall(node_st *node)
             HAD_ERROR = true;
             USER_ERROR("Argument type %s and parameter type %s don't match",
                 vt_to_str(types[i]), vt_to_str(param_types[i]));
-            printf("At %s\n", FUNCALL_NAME(node));
         }
 
         // TODO: Re-introduce this size check when I figure out how
@@ -777,6 +807,29 @@ node_st *CTAglobdef(node_st *node)
 
         s->as.array.dim_count = n_dims;
         s->as.array.dims = ids;
+
+        if (GLOBDEF_INIT(node) != NULL && NODE_TYPE(GLOBDEF_INIT(node)) != NT_ARREXPR) {
+            // Create hidden array variables for scalar initialisation
+            char* scalar_symbol_name = safe_concat_str(STRcpy("_scalar_"), STRcpy(s->name));
+            char* counter_symbol_name = safe_concat_str(STRcpy("_counter_"), STRcpy(s->name));
+            char* size_symbol_name = safe_concat_str(STRcpy("_size_"), STRcpy(s->name));
+
+            Symbol* scalar_symbol = SBfromVar(scalar_symbol_name, VT_NUM, false);
+            Symbol* counter_symbol = SBfromVar(scalar_symbol_name, VT_NUM, false);
+            Symbol* size_symbol = SBfromVar(scalar_symbol_name, VT_NUM, false);
+
+            scalar_symbol->offset = GLOBAL_VAR_OFFSET++;
+            counter_symbol->offset = GLOBAL_VAR_OFFSET++;
+            size_symbol->offset = GLOBAL_VAR_OFFSET++;
+
+            STinsert(CURRENT_SCOPE, scalar_symbol_name, scalar_symbol);
+            STinsert(CURRENT_SCOPE, counter_symbol_name, counter_symbol);
+            STinsert(CURRENT_SCOPE, size_symbol_name, size_symbol);
+
+            MEMfree(scalar_symbol_name);
+            MEMfree(counter_symbol_name);
+            MEMfree(size_symbol_name);
+        }
     } else {
         s = SBfromVar(name, type, false);
     }
@@ -786,8 +839,8 @@ node_st *CTAglobdef(node_st *node)
     s->offset = GLOBAL_VAR_OFFSET++;
     STinsert(CURRENT_SCOPE, name, s);
 
-    // Types do not implicitly convert
-    if (GLOBDEF_INIT(node) != NULL && ct_to_vt(GLOBDEF_TYPE(node), is_array) != LAST_TYPE) {
+    // Typecheck init; demote array
+    if (GLOBDEF_INIT(node) != NULL && ct_to_vt(GLOBDEF_TYPE(node), false) != LAST_TYPE) {
         HAD_ERROR = true;
         USER_ERROR("Variable of type %s was initialised with expression of type %s",
             vt_to_str(ct_to_vt(GLOBDEF_TYPE(node), is_array)),
@@ -871,6 +924,29 @@ node_st *CTAvardecl(node_st *node)
 
         s->as.array.dim_count = n_dims;
         s->as.array.dims = ids;
+
+        if (VARDECL_INIT(node) != NULL && NODE_TYPE(VARDECL_INIT(node)) != NT_ARREXPR) {
+            // Create hidden array variables for scalar initialisation
+            char* scalar_symbol_name = safe_concat_str(STRcpy("_scalar_"), STRcpy(s->name));
+            char* counter_symbol_name = safe_concat_str(STRcpy("_counter_"), STRcpy(s->name));
+            char* size_symbol_name = safe_concat_str(STRcpy("_size_"), STRcpy(s->name));
+
+            Symbol* scalar_symbol = SBfromVar(scalar_symbol_name, VT_NUM, false);
+            Symbol* counter_symbol = SBfromVar(scalar_symbol_name, VT_NUM, false);
+            Symbol* size_symbol = SBfromVar(scalar_symbol_name, VT_NUM, false);
+
+            scalar_symbol->offset = CURRENT_SCOPE->localvar_offset_counter++;
+            counter_symbol->offset = CURRENT_SCOPE->localvar_offset_counter++;
+            size_symbol->offset = CURRENT_SCOPE->localvar_offset_counter++;
+
+            STinsert(CURRENT_SCOPE, scalar_symbol_name, scalar_symbol);
+            STinsert(CURRENT_SCOPE, counter_symbol_name, counter_symbol);
+            STinsert(CURRENT_SCOPE, size_symbol_name, size_symbol);
+
+            MEMfree(scalar_symbol_name);
+            MEMfree(counter_symbol_name);
+            MEMfree(size_symbol_name);
+        }
     } else {
         s = SBfromVar(name, type, false);
     }
@@ -881,8 +957,8 @@ node_st *CTAvardecl(node_st *node)
     s->offset = CURRENT_SCOPE->localvar_offset_counter++;
     STinsert(CURRENT_SCOPE, name, s);
 
-    // Types do not implicitly convert
-    if (VARDECL_INIT(node) != NULL && ct_to_vt(VARDECL_TYPE(node), is_array) != LAST_TYPE) {
+    // Typecheck init, demote array
+    if (VARDECL_INIT(node) != NULL && ct_to_vt(VARDECL_TYPE(node), false) != LAST_TYPE) {
         HAD_ERROR = true;
         USER_ERROR("Variable of type %s was initialised with expression of type %s",
             vt_to_str(ct_to_vt(VARDECL_TYPE(node), is_array)),

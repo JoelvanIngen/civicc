@@ -65,6 +65,8 @@ typedef struct VarImport {
 typedef struct {
     Instruction* instrs;
     Instruction* last_instr;
+    Instruction* init_instrs;
+    Instruction* last_init_instr;
     Constant* consts;
     Constant* last_const;
     FunExport* fun_exports;
@@ -98,6 +100,7 @@ void ASMinit(Assembly* assembly);
 void ASMfree(Assembly** assembly_ptr);
 
 void ASMemitInstr(Assembly* assembly, char* instr_name, char* arg0, char* arg1, char* arg2);
+void ASMemitInit(Assembly* assembly, char* instr_name, char* arg0, char* arg1, char* arg2);
 void ASMemitLabel(Assembly* assembly, char* label, bool is_fun);
 void ASMemitConst(Assembly* assembly, char* type, char* val);
 void ASMemitFunExport(Assembly* assembly, char* name, char* ret_type, size_t arglen, char** args);

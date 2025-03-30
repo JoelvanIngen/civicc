@@ -32,6 +32,16 @@ static void write_instructions(FILE* f, const Instruction* instruction) {
     }
 }
 
+static void write_init_instructions(FILE* f, const Instruction* init_instruction) {
+    if (init_instruction == NULL) {
+        return;
+    }
+
+    fprintf(f, "__init:\n");
+    write_instructions(f, init_instruction);
+    fprintf(f, "    return\n\n");
+}
+
 static void write_single_constant(FILE* f, const Constant* constant) {
     fprintf(f, ".const %s %s", constant->type, constant->value);
 }
@@ -117,6 +127,7 @@ static void write_var_imports(FILE* f, const VarImport* import) {
 }
 
 void write_assembly(FILE* f, const Assembly* ASM) {
+    write_init_instructions(f, ASM->init_instrs);
     write_instructions(f, ASM->instrs);
     fprintf(f, "\n");  // Extra newline like in examples
     write_constants(f, ASM->consts);
