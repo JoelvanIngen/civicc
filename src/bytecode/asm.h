@@ -65,6 +65,8 @@ typedef struct VarImport {
 typedef struct {
     Instruction* instrs;
     Instruction* last_instr;
+    Instruction* init_instrs;
+    Instruction* last_init_instr;
     Constant* consts;
     Constant* last_const;
     FunExport* fun_exports;
@@ -97,10 +99,11 @@ typedef struct FunImportEntry {
 void ASMinit(Assembly* assembly);
 void ASMfree(Assembly** assembly_ptr);
 
-void ASMemitInstr(Assembly* assembly, char* instr_name, char* arg0, char* arg1, char* arg2);
-void ASMemitLabel(Assembly* assembly, char* label, bool is_fun);
-void ASMemitConst(Assembly* assembly, char* type, char* val);
-void ASMemitFunExport(Assembly* assembly, char* name, char* ret_type, size_t arglen, char** args);
+void ASMemitInstr(Assembly* assembly, const char* instr_name, const char* arg0, const char* arg1, const char* arg2);
+void ASMemitInit(Assembly* assembly, const char* instr_name, const char* arg0, const char* arg1, const char* arg2);
+void ASMemitLabel(Assembly* assembly, const char* label, bool is_fun);
+void ASMemitConst(Assembly* assembly, char* type, const char* val);
+void ASMemitFunExport(Assembly* assembly, const char* name, const char* ret_type, size_t arglen, char** args);
 void ASMemitVarExport(Assembly* assembly, char* name, size_t glob_index);
 void ASMemitGlobVar(Assembly* assembly, char* type);
 void ASMemitFunImport(Assembly* assembly, char* name, char* ret_type, size_t arg_amount, char** args);

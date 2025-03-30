@@ -4,12 +4,12 @@
 
 #include "common.h"
 
+struct Symbol;
 struct SymbolTable;
 
 typedef struct {
     size_t dim_count;
-    size_t capacity;
-    size_t** dims;
+    struct Symbol** dims;               // Array of pointers to symbols
 } ArrayData;
 
 typedef struct {
@@ -25,7 +25,7 @@ typedef struct {
     struct SymbolTable* scope;          // Create own scope for for-loops
 } ForloopData;
 
-typedef struct {
+typedef struct Symbol {
     SymbolType stype;
     ValueType vtype;
     char* name;
@@ -40,10 +40,11 @@ typedef struct {
     } as;
 } Symbol;
 
-Symbol* SBfromFun(char* name, ValueType vt, size_t param_count, bool imported);
-Symbol* SBfromArray(char* name, ValueType vt, bool imported);
-Symbol* SBfromVar(char* name, ValueType vt, bool imported);
-Symbol* SBfromForLoop(char* adjusted_name);
+#define IS_ARRAY(vt) (vt == VT_NUMARRAY || vt == VT_FLOATARRAY || vt == VT_BOOLARRAY)
+
+Symbol* SBfromFun(const char* name, ValueType vt, size_t param_count, bool imported);
+Symbol* SBfromArray(const char* name, ValueType vt, bool imported);
+Symbol* SBfromVar(const char* name, ValueType vt, bool imported);
+Symbol* SBfromForLoop(const char* adjusted_name);
 void SBfree(Symbol** s_ptr);
 void SBaddDim(Symbol* s, size_t dim);
-void SBaddParam(Symbol* s, size_t dim_count);

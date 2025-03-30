@@ -9,6 +9,8 @@
 void ASMinit(Assembly* assembly) {
     assembly->instrs = NULL;
     assembly->last_instr = NULL;
+    assembly->init_instrs = NULL;
+    assembly->last_init_instr = NULL;
     assembly->fun_exports = NULL;
     assembly->last_fun_export = NULL;
     assembly->var_exports = NULL;
@@ -31,6 +33,20 @@ static Instruction* new_instruction(Assembly* assembly) {
     }
 
     assembly->last_instr = instr;
+
+    return instr;
+}
+
+static Instruction* new_init_instruction(Assembly* assembly) {
+    Instruction* instr = MEMmalloc(sizeof(Instruction));
+    instr->next = NULL;
+    if (assembly->last_init_instr == NULL) {
+        assembly->init_instrs = instr;
+    } else {
+        assembly->last_init_instr->next = instr;
+    }
+
+    assembly->last_init_instr = instr;
 
     return instr;
 }
@@ -162,6 +178,13 @@ void ASMfree(Assembly** assembly_ptr) {
         instr = instr->next;
     }
 
+    // Free init instructions
+    Instruction* init_inst = assembly->init_instrs;
+    while (init_inst != NULL) {
+        free_instruction(init_inst);
+        init_inst = init_inst->next;
+    }
+
     // Free constants
     Constant* constant = assembly->consts;
     while (constant != NULL) {
@@ -208,7 +231,7 @@ void ASMfree(Assembly** assembly_ptr) {
     *assembly_ptr = NULL;
 }
 
-void ASMemitInstr(Assembly* assembly, char* instr_name, char* arg0, char* arg1, char* arg2) {
+void ASMemitInstr(Assembly* assembly, const char* instr_name, const char* arg0, const char* arg1, const char* arg2) {
     Instruction* instr = new_instruction(assembly);
     instr->instr = STRcpy(instr_name);
     instr->is_label = false;
@@ -218,20 +241,30 @@ void ASMemitInstr(Assembly* assembly, char* instr_name, char* arg0, char* arg1, 
     instr->arg2 = arg2 ? STRcpy(arg2) : NULL;
 }
 
-void ASMemitLabel(Assembly* assembly, char* label, bool is_fun) {
+void ASMemitInit(Assembly* assembly, const char* instr_name, const char* arg0, const char* arg1, const char* arg2) {
+    Instruction* instr = new_init_instruction(assembly);
+    instr->instr = STRcpy(instr_name);
+    instr->is_label = false;
+    instr->is_fun = false;
+    instr->arg0 = arg0 ? STRcpy(arg0) : NULL;
+    instr->arg1 = arg1 ? STRcpy(arg1) : NULL;
+    instr->arg2 = arg2 ? STRcpy(arg2) : NULL;
+}
+
+void ASMemitLabel(Assembly* assembly, const char* label, bool const is_fun) {
     Instruction* instr = new_instruction(assembly);
     instr->instr = STRcpy(label);
     instr->is_label = true;
     instr->is_fun = is_fun;
 }
 
-void ASMemitConst(Assembly* assembly, char* type, char* val) {
+void ASMemitConst(Assembly* assembly, char* type, const char* val) {
     Constant* constant = new_constant(assembly);
     constant->type = type;
     constant->value = STRcpy(val);
 }
 
-void ASMemitFunExport(Assembly* assembly, char* name, char* ret_type, size_t arglen, char** args) {
+void ASMemitFunExport(Assembly* assembly, const char* name, const char* ret_type, const size_t arglen, char** args) {
     FunExport* fun_export = new_fun_export(assembly);
     fun_export->name = STRcpy(name);
     fun_export->ret_type = STRcpy(ret_type);

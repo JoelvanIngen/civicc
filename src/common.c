@@ -85,6 +85,18 @@ char* int_to_str(const int i) {
     return buf;
 }
 
+ValueType demote_array_type(const ValueType array_type) {
+    switch (array_type) {
+        case VT_NUMARRAY: return VT_NUM;
+        case VT_FLOATARRAY: return VT_FLOAT;
+        case VT_BOOLARRAY: return VT_BOOL;
+        default: // Should never occur
+#ifdef DEBUGGING
+            ERROR("Cannot demote ValueType array %i", array_type);
+#endif
+    }
+}
+
 /**
  * Concatenates two strings and frees them
  * @param s1 first string
@@ -97,4 +109,13 @@ char* safe_concat_str(char* s1, char* s2) {
     MEMfree(s1);
     MEMfree(s2);
     return buf;
+}
+
+char* generate_array_dim_name(const char* parent_name, const size_t i) {
+    return safe_concat_str(
+            safe_concat_str(
+                safe_concat_str(STRcpy("_index"),
+                    int_to_str((int) i)),
+                    STRcpy("_")),
+                STRcpy(parent_name));
 }

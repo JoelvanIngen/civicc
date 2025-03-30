@@ -8,7 +8,7 @@
  * @param name name of the symbol that we want to find
  * @return symbol if found in table or any parent, else NULL
  */
-Symbol* ScopeTreeFind(SymbolTable* scope, char* name) {
+Symbol* ScopeTreeFind(const SymbolTable* scope, char* name) {
 #ifdef DEBUGGING
     ASSERT_MSG((scope != NULL), "Got NULL for variable scope");
 #endif // DEBUGGING

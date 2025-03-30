@@ -18,6 +18,12 @@
 #include "symbol/scopetree.h"
 #include "symbol/table.h"
 
+typedef enum Origin {
+    GLOBAL_ORIGIN,
+    LOCAL_ORIGIN,
+    IMPORTED_ORIGIN,
+} Origin;
+
 static FILE* ASM_FILE;
 static Assembly ASM;
 
@@ -33,18 +39,36 @@ static bool HAD_EXPR = false;
 // Checks whether a return statement is issued (or if we need to implicitly add one in case of void)
 static bool HAD_RETURN = false;
 
-// Checks whether we returned from our init function
-static bool HAD_INIT_RETURN = false;
-
-// Shortcuts to prevent having to provide asm as argument every call
+/**
+ * Emits instruction; shortcut to prevent manually passing ASM pointer
+ * @param instr_name name of instruction
+ * @param arg0 optional first argument
+ * @param arg1 optional second argument
+ * @param arg2 optional third argument
+ */
 void Instr(char* instr_name, char* arg0, char* arg1, char* arg2) {
-    ASMemitInstr(&ASM, instr_name, arg0, arg1, arg2);
+    if (CURRENT_SCOPE->nesting_level == 0) {
+        ASMemitInit(&ASM, instr_name, arg0, arg1, arg2);
+    } else {
+        ASMemitInstr(&ASM, instr_name, arg0, arg1, arg2);
+    }
 }
 
-void Label(char* label, bool is_fun) {
+/**
+ * Emits label; shortcut to prevent manually passing ASM pointer
+ * @param label label name
+ * @param is_fun boolean indicating whether label is a function start of regular label
+ */
+void Label(char* label, const bool is_fun) {
     ASMemitLabel(&ASM, label, is_fun);
 }
 
+/**
+ * Creates an array of valuetypes represented as strings
+ * @param vts pointer to array of valuetypes
+ * @param len length of array
+ * @return pointer to array of strings of valuetypes
+ */
 char** generate_vt_strs(const ValueType* vts, const size_t len) {
     char** strs = MEMmalloc(len * sizeof(char*));
     for (size_t i = 0; i < len; i++) {
@@ -53,15 +77,12 @@ char** generate_vt_strs(const ValueType* vts, const size_t len) {
     return strs;
 }
 
-static FunExportEntry find_fun_export(char* name) {
-    const FunExportEntry res = ASMfindFunExport(&ASM, name);
-#ifdef DEBUGGING
-    ASSERT_MSG((res.get != 0), "Result of retrieving known exported function yielded no results");
-#endif // DEBUGGING
-    return res;
-}
-
-static FunImportEntry find_fun_import(char* name) {
+/**
+ * Finds a known function import in the import table and returns its entry in the table
+ * @param name name of function import to find
+ * @return found entry in function import table
+ */
+static FunImportEntry find_fun_import(const char* name) {
     const FunImportEntry res = ASMfindFunImport(&ASM, name);
 #ifdef DEBUGGING
     ASSERT_MSG((res.get != 0), "Result of retrieving known imported function yielded no results");
@@ -81,11 +102,456 @@ char* generate_label_name(char* name) {
     return safe_concat_str(res, name);
 }
 
+/**
+ * Loads the correct array reference to the stack
+ * @param arr array to load reference
+ */
+static void load_array_ref(const Symbol* arr) {
+    char* offset_str = int_to_str((int) arr->offset);
+    if (arr->imported) {
+        Instr("aloade", offset_str, NULL, NULL);
+    } else if (arr->parent_scope->nesting_level == 0) {
+        Instr("aloadg", offset_str, NULL, NULL);
+    } else if (arr->parent_scope->nesting_level == CURRENT_SCOPE->nesting_level) {
+        Instr("aload", offset_str, NULL, NULL);
+    } else {
+        char* nesting_diff_str = int_to_str((int) (CURRENT_SCOPE->nesting_level - arr->parent_scope->nesting_level));
+        Instr("aloadn", nesting_diff_str, offset_str, NULL);
+        MEMfree(nesting_diff_str);
+    }
+    MEMfree(offset_str);
+}
+
+/**
+ * Emits the correct instruction for storing a value into an array reference
+ * @param arr array symbol
+ */
+static void store_array_ref_with_value(const Symbol* arr) {
+    switch (arr->vtype) {
+        case VT_NUMARRAY: Instr("istorea", NULL, NULL, NULL); break;
+        case VT_FLOATARRAY: Instr("fstorea", NULL, NULL, NULL); break;
+        case VT_BOOLARRAY: Instr("bstorea", NULL, NULL, NULL); break;
+        default:
+#ifdef DEBUGGING
+            ERROR("Unexpected array vtype %s", vt_to_str(arr->vtype));
+#endif // DEBUGGING
+    }
+}
+
+/**
+ * Emits the correct instruction for loading a value from an array reference
+ * @param arr array symbol
+ */
+static void load_array_ref_with_value(const Symbol* arr) {
+    switch (arr->vtype) {
+        case VT_NUMARRAY: Instr("iloada", NULL, NULL, NULL); break;
+        case VT_FLOATARRAY: Instr("floada", NULL, NULL, NULL); break;
+        case VT_BOOLARRAY: Instr("bloada", NULL, NULL, NULL); break;
+        default:
+#ifdef DEBUGGING
+            ERROR("Unexpected array vtype %s", vt_to_str(arr->vtype));
+#endif // DEBUGGING
+    }
+}
+
+/**
+ * Pushes single dimension value onto the stack
+ * @param dim dim symbol to push
+ */
+static void push_array_dim(const Symbol* dim) {
+    char* instr;
+    char* offset_str = int_to_str((int) dim->offset);
+    if (dim->imported) {
+        instr = "iloade";
+    } else if (dim->parent_scope->nesting_level == 0) {
+        instr = "iloadg";
+    } else if (dim->parent_scope->nesting_level == CURRENT_SCOPE->nesting_level) {
+        instr = "iload";
+    } else {
+        instr = "iloadn";
+        char* nesting_diff_str = int_to_str((int) (CURRENT_SCOPE->nesting_level - dim->parent_scope->nesting_level));
+        Instr(instr, nesting_diff_str, offset_str, NULL);
+
+        MEMfree(nesting_diff_str);
+        MEMfree(offset_str);
+        // Skip rest of the function due to differing instruction format
+        return;
+    }
+
+    Instr(instr, offset_str, NULL, NULL);
+    MEMfree(offset_str);
+}
+
+/**
+ * Pushes all array dimensions starting from starting index onto the stack
+ * @param arr array symbol
+ * @param start start index
+ */
+static void push_array_dims(const Symbol* arr, const size_t start) {
+    for (size_t i = start; i < arr->as.array.dim_count; i++) {
+        const Symbol* dim = arr->as.array.dims[i];
+
+        push_array_dim(dim);
+    }
+}
+
+/**
+ * Emits the correct instructions for computing the size of an array at runtime
+ * @param arr array symbol
+ */
+static void comp_array_size(const Symbol* arr) {
+    push_array_dims(arr, 0);
+    for (size_t i = 1; i < arr->as.array.dim_count; i++) Instr("imul", NULL, NULL, NULL);
+}
+
+/**
+ * Stores single dimension value from stack into variable
+ * @param dim dim symbol to store into
+ */
+static void store_array_dim(const Symbol* dim) {
+    char* instr;
+    char* offset_str = int_to_str((int) dim->offset);
+    if (dim->imported) {
+        instr = "istoree";
+    } else if (dim->parent_scope->nesting_level == 0) {
+        instr = "istoreg";
+    } else if (dim->parent_scope->nesting_level == CURRENT_SCOPE->nesting_level) {
+        instr = "istore";
+    } else {
+        instr = "istoren";
+        char* nesting_diff_str = int_to_str((int) (CURRENT_SCOPE->nesting_level - dim->parent_scope->nesting_level));
+        Instr(instr, nesting_diff_str, offset_str, NULL);
+
+        MEMfree(nesting_diff_str);
+        MEMfree(offset_str);
+        // Skip rest of the loop due to differing instruction format
+        return;
+    }
+
+    Instr(instr, offset_str, NULL, NULL);
+    MEMfree(offset_str);
+}
+
+/**
+ * Pushes all array dimensions onto the stack and then the array reference itself
+ * @param arr array whose dimensions to push onto stack
+ */
+static void push_array_with_dims(const Symbol* arr) {
+    push_array_dims(arr, 0);
+
+    char* instr;
+    char* offset_str = int_to_str((int) arr->offset);
+    if (arr->imported) {
+        instr = "aloade";
+    } else if (arr->parent_scope->nesting_level == 0) {
+        instr = "aloadg";
+    } else if (arr->parent_scope->nesting_level == CURRENT_SCOPE->nesting_level) {
+        instr = "aload";
+    } else {
+        instr = "aloadn";
+        char* nesting_diff_str = int_to_str((int) (CURRENT_SCOPE->nesting_level - arr->parent_scope->nesting_level));
+        Instr(instr, nesting_diff_str, offset_str, NULL);
+
+        MEMfree(nesting_diff_str);
+        MEMfree(offset_str);
+        // Return due to differing instruction format
+        return;
+    }
+
+    Instr(instr, offset_str, NULL, NULL);
+    MEMfree(offset_str);
+}
+
+/**
+ * Fills all array size parameters with the correct values
+ * @param arr array to populate
+ * @param exprs_node first Exprs node of the arrays dimensions
+ */
+static void fill_array_dims(const Symbol* arr, node_st* exprs_node) {
+    for (size_t i = 0; i < arr->as.array.dim_count; i++) {
+        const Symbol* dim = arr->as.array.dims[i];
+
+        // Push value onto stack, should evaluate to integer
+        TRAVexpr(exprs_node);
+#ifdef DEBUGGING
+        ASSERT_MSG((LAST_TYPE == VT_NUM), "Array dimension did not evaluate to int");
+#endif // DEBUGGING
+
+        // Save value
+        store_array_dim(dim);
+
+        exprs_node = EXPRS_NEXT(exprs_node);
+    }
+}
+
+/**
+ * Flattens exprs into flat array index for multidimensional arrays
+ * @param arr array symbol
+ * @param exprs_node starting exprs node
+ */
+static void flatten_dim_exprs(const Symbol* arr, node_st* exprs_node) {
+    for (size_t i = 0; i < arr->as.array.dim_count; i++) {
+        // Find index
+        TRAVexpr(exprs_node);
+
+        // Multiply index with mul-result of all next dim sizes for flattening
+        if (i < arr->as.array.dim_count - 1) {
+            push_array_dims(arr, i + 1);
+            for (size_t j = i + 1; j < arr->as.array.dim_count; j++) Instr("imul", NULL, NULL, NULL);
+        }
+
+        // Add together with prev size
+        if (i != 0) Instr("iadd", NULL, NULL, NULL);
+
+        exprs_node = EXPRS_NEXT(exprs_node);
+    }
+}
+
+/**
+ * Instantiates an array in bytecode. Pushes its dimensions,
+ * which must already have been saved, and then multiplies
+ * them so the total size is reached. Then creates array with
+ * size and stores array to array offset
+ * @param arr array symbol
+ */
+static void create_array_with_size(const Symbol* arr) {
+    // Push all values
+    push_array_dims(arr, 0);
+
+    // Push n_values - 1 imul instructions
+    for (size_t i = 1; i < arr->as.array.dim_count; i++) Instr("imul", NULL, NULL, NULL);
+
+    // Store array size
+    switch (arr->vtype) {
+        case VT_NUMARRAY: Instr("inewa", NULL, NULL, NULL); break;
+        case VT_FLOATARRAY: Instr("fnewa", NULL, NULL, NULL); break;
+        case VT_BOOLARRAY: Instr("bnewa", NULL, NULL, NULL); break;
+        default:
+#ifdef DEBUGGING
+            ERROR("Unexpected array type %s", vt_to_str(arr->vtype));
+#endif // DEBUGGING
+    }
+
+    // Store array reference
+    char* offset_str = int_to_str((int) arr->offset);
+    if (arr->imported) {
+        Instr("astoree", offset_str, NULL, NULL);
+    } else if (arr->parent_scope->nesting_level == 0) {
+        Instr("astoreg", offset_str, NULL, NULL);
+    } else if (arr->parent_scope->nesting_level == CURRENT_SCOPE->nesting_level) {
+        Instr("astore", offset_str, NULL, NULL);
+    } else {
+        char* nesting_diff_str = int_to_str((int) (CURRENT_SCOPE->nesting_level - arr->parent_scope->nesting_level));
+        Instr("astoren", nesting_diff_str, offset_str, NULL);
+        MEMfree(nesting_diff_str);
+    }
+    MEMfree(offset_str);
+}
+
+/**
+ * Initialises an array with a single scalar
+ * @param arr array symbol
+ */
+static void init_array_with_scalar(const Symbol* arr) {
+    // Expr must have been traversed and on stack top
+
+    // Scalar value variable
+    char* scalar_symbol_name = safe_concat_str(STRcpy("_scalar_"), STRcpy(arr->name));
+    const Symbol* scalar_symbol = STlookup(arr->parent_scope, scalar_symbol_name);
+    MEMfree(scalar_symbol_name);
+    char* scalar_offset_str = int_to_str((int) scalar_symbol->offset);
+
+    // Loop counter variable
+    char* counter_symbol_name = safe_concat_str(STRcpy("_counter_"), STRcpy(arr->name));
+    const Symbol* counter_symbol = STlookup(arr->parent_scope, counter_symbol_name);
+    MEMfree(counter_symbol_name);
+    char* counter_offset_str = int_to_str((int) counter_symbol->offset);
+
+    // Array size variable
+    char* size_symbol_name = safe_concat_str(STRcpy("_size_"), STRcpy(arr->name));
+    const Symbol* size_symbol = STlookup(arr->parent_scope, size_symbol_name);
+    MEMfree(size_symbol_name);
+    char* size_offset_str = int_to_str((int) size_symbol->offset);
+
+    // Array variable
+    char* arr_offset_str = int_to_str((int) arr->offset);
+
+    char* for_loop_start_name = generate_label_name(STRcpy("for_loop_start"));
+    char* for_loop_end_name = generate_label_name(STRcpy("for_loop_end"));
+
+    // Save expr to expr variable
+    switch (LAST_TYPE) {
+        case VT_NUM: Instr("istore", scalar_offset_str, NULL, NULL); break;
+        case VT_FLOAT: Instr("fstore", scalar_offset_str, NULL, NULL); break;
+        case VT_BOOL: Instr("bstore", scalar_offset_str, NULL, NULL); break;
+        default:
+#ifdef DEBUGGING
+            ERROR("Trying to scalar-init a variable with a non-scalar");
+#endif
+    }
+
+    // Save loop counter (zero)
+    Instr("iloadc_0", NULL, NULL, NULL);
+    Instr("istore", counter_offset_str, NULL, NULL);
+
+    // Save array size (end value for counter)
+    comp_array_size(arr);
+    Instr("istore", size_offset_str, NULL, NULL);
+
+    // --- START FOR LOOP
+    // Emit label
+    Label(for_loop_start_name, false);
+
+    // Check loop condition
+    Instr("iload", counter_offset_str, NULL, NULL);
+    Instr("iload", size_offset_str, NULL, NULL);
+    Instr("ilt", NULL, NULL, NULL);
+    Instr("branch_f", for_loop_end_name, NULL, NULL);
+
+    // Save scalar to array at index [counter]
+    // Load scalar
+    switch (LAST_TYPE) {
+        case VT_NUM: Instr("iload", scalar_offset_str, NULL, NULL); break;
+        case VT_FLOAT: Instr("fload", scalar_offset_str, NULL, NULL); break;
+        case VT_BOOL: Instr("bload", scalar_offset_str, NULL, NULL); break;
+        default:
+#ifdef DEBUGGING
+            ERROR("Trying to scalar-init a variable with a non-scalar");
+#endif
+    }
+
+    // Load array index (counter) + load array reference
+    if (arr->imported) {
+        Instr("iloade", counter_offset_str, NULL, NULL);
+        Instr("aloade", arr_offset_str, NULL, NULL);
+    } else if (arr->parent_scope->nesting_level == 0) {
+        Instr("iloadg", counter_offset_str, NULL, NULL);
+        Instr("aloadg", arr_offset_str, NULL, NULL);
+    } else if (arr->parent_scope->nesting_level == CURRENT_SCOPE->nesting_level) {
+        Instr("iload", counter_offset_str, NULL, NULL);
+        Instr("aload", arr_offset_str, NULL, NULL);
+    } else {
+        char* nesting_diff_str = int_to_str((int) (CURRENT_SCOPE->nesting_level - arr->parent_scope->nesting_level));
+        Instr("iloadn", nesting_diff_str, counter_offset_str, NULL);
+        Instr("aloadn", nesting_diff_str, arr_offset_str, NULL);
+    }
+
+    // Store value
+    switch (LAST_TYPE) {
+        case VT_NUM: Instr("istorea", NULL, NULL, NULL); break;
+        case VT_FLOAT: Instr("fstorea", NULL, NULL, NULL); break;
+        case VT_BOOL: Instr("bstorea", NULL, NULL, NULL); break;
+        default:
+#ifdef DEBUGGING
+            ERROR("Trying to scalar-init a variable with a non-scalar");
+#endif
+    }
+
+    // Increment counter
+    Instr("iinc_1", counter_offset_str, NULL, NULL);
+
+    // Jump back
+    Instr("jump", for_loop_start_name, NULL, NULL);
+
+    // --- END FOR LOOP
+    // Emit label
+    Label(for_loop_end_name, false);
+
+    MEMfree(scalar_offset_str);
+    MEMfree(counter_offset_str);
+    MEMfree(size_offset_str);
+    MEMfree(arr_offset_str);
+    MEMfree(for_loop_start_name);
+    MEMfree(for_loop_end_name);
+}
+
+/**
+ * Counts the amount of expressions an arrexpr contains. Also explores nested
+ * arrexprs and errors on inconsistent size.
+ * @param node arrexpr node used to initialise array
+ * @return amount of expressions (recursively) contained by the arrexpr
+ */
+static size_t count_arrexpr(node_st* node) {
+    size_t count = 0;
+
+    const enum ccn_nodetype type = NODE_TYPE(node);
+
+    if (type == NT_ARREXPR) {
+        return count_arrexpr(ARREXPR_EXPRS(node));
+    }
+
+    if (type == NT_EXPRS) {
+        bool only_arrexpr = false;
+        while (node != NULL) {
+            if (NODE_TYPE(EXPRS_EXPR(node)) == NT_ARREXPR) {
+                count += count_arrexpr(EXPRS_EXPR(node));
+                only_arrexpr = true;
+            } else {
+                count++;
+                if (only_arrexpr) {
+                    USER_ERROR("Inconsistent initialisation value shape of array");
+                    exit(EXIT_FAILURE);
+                }
+            }
+
+            node = EXPRS_NEXT(node);
+        }
+    }
+
+    return count;
+}
+
+/**
+ * Initialises an array with an arrexpr. Supports nested arrexprs.
+ * @param arr array symbol
+ * @param count amout of initialisation exprs expected
+ */
+static void init_array_with_arrexpr(const Symbol* arr, const size_t count) {
+    // Arrexprs must have been traversed and all stored on stack
+    // We save them in reverse starting from the last initialised array index
+
+    char* instr;
+    switch (arr->vtype) {
+        case VT_NUMARRAY: instr = "istorea"; break;
+        case VT_FLOATARRAY: instr = "fstorea"; break;
+        case VT_BOOLARRAY: instr = "bstorea"; break;
+        default:
+#ifdef DEBUGGING
+            ERROR("Unexpected array vtype %s", vt_to_str(arr->vtype));
+#endif
+    }
+
+    char* arr_offset_str = int_to_str((int) arr->offset);
+
+    for (int idx = (int) count - 1; idx >= 0; idx--) {
+        // Push index
+        char* idx_str = int_to_str(idx);
+        ASMemitConst(&ASM, "int", idx_str);
+
+        const size_t idx_offset = CONST_COUNT++;
+        char* idx_offset_str = int_to_str((int) idx_offset);
+
+        Instr("iloadc", idx_offset_str, NULL, NULL);
+
+        // Push array reference
+        load_array_ref(arr);
+
+        // Save value
+        Instr(instr, NULL, NULL, NULL);
+
+        MEMfree(idx_str);
+        MEMfree(idx_offset_str);
+    }
+
+    MEMfree(arr_offset_str);
+}
+
 static void init() {
     CURRENT_SCOPE = GB_GLOBAL_SCOPE;
 }
 
 static void fini() {
+    // Write assembly output
     ASM_FILE = fopen(global.output_file, "w");
     if (ASM_FILE == NULL) {
         fprintf(stderr, "Error creating bytecode file");
@@ -106,18 +572,10 @@ node_st *BCprogram(node_st *node)
     init();
 
     if (GB_REQUIRES_INIT_FUNCTION) {
-        Label("__init", true);
         ASMemitFunExport(&ASM, "__init", "void", 0, NULL);
     }
 
     TRAVchildren(node);
-
-    // If we created an init function and did not close it yet, and don't have a funbody anywhere,
-    // we should close now
-    if (GB_REQUIRES_INIT_FUNCTION && !HAD_INIT_RETURN) {
-        HAD_INIT_RETURN = true;
-        Instr("return", NULL, NULL, NULL);
-    }
 
     // Write collected ASM to file
     fini();
@@ -159,7 +617,7 @@ node_st *BCarrexpr(node_st *node)
     TRAVchildren(node);
 
     /**
-     * TODO: No idea
+     * Do nothing
      */
     return node;
 }
@@ -240,7 +698,6 @@ node_st *BCfuncall(node_st *node)
 
     const size_t current_level = CURRENT_SCOPE->parent_fun->parent_scope->nesting_level;
     const size_t fun_level = s->parent_scope->nesting_level;
-    const size_t fun_offset = s->offset;
 
     if (fun_level == 0) {
         // Global function
@@ -454,12 +911,6 @@ node_st *BCfundef(node_st *node)
 
     // Switch scopes and traverse if not external function
     if (!fun_symbol->imported) {
-        // If we created an init function and did not close it yet, now is the time to do so
-        if (GB_REQUIRES_INIT_FUNCTION && !HAD_INIT_RETURN) {
-            HAD_INIT_RETURN = true;
-            Instr("return", NULL, NULL, NULL);
-        }
-
         // Switch scope
         SymbolTable* prev_scope = CURRENT_SCOPE;
         CURRENT_SCOPE = fun_symbol->as.fun.scope;
@@ -493,6 +944,7 @@ node_st *BCfunbody(node_st *node)
     Label(label_name, true);
 
     // Only write "esr" if at least one variable (NOT PARAMETER) will be initialised
+    // TODO: Prevent "esr" if argument is array with dims
     if (CURRENT_SCOPE->localvar_offset_counter
         - CURRENT_SCOPE->parent_fun->as.fun.param_count > 0) {
 
@@ -637,7 +1089,7 @@ node_st *BCfor(node_st *node)
 #ifdef DEBUGGING
     ASSERT_MSG((LAST_TYPE == VT_NUM), "Got a non-integer value for loop start expression");
 #endif // DEBUGGING
-    Symbol* s_counter = STlookup(CURRENT_SCOPE, name);
+    const Symbol* s_counter = STlookup(CURRENT_SCOPE, name);
     char* loop_offset_str = int_to_str((int) s_counter->offset);
     Instr("istore", loop_offset_str, NULL, NULL);
 
@@ -645,7 +1097,7 @@ node_st *BCfor(node_st *node)
 #ifdef DEBUGGING
     ASSERT_MSG((LAST_TYPE == VT_NUM), "Got a non-integer value for loop stop condition");
 #endif // DEBUGGING
-    Symbol* s_cond = STlookup(CURRENT_SCOPE, "_cond");
+    const Symbol* s_cond = STlookup(CURRENT_SCOPE, "_cond");
     char* cond_offset_str = int_to_str((int) s_cond->offset);
     Instr("istore", cond_offset_str, NULL, NULL);
 
@@ -653,7 +1105,7 @@ node_st *BCfor(node_st *node)
 #ifdef DEBUGGING
     ASSERT_MSG((LAST_TYPE == VT_NUM), "Got a non-integer value for loop step expression");
 #endif // DEBUGGING
-    Symbol* s_step = STlookup(CURRENT_SCOPE, "_step");
+    const Symbol* s_step = STlookup(CURRENT_SCOPE, "_step");
     char* step_offset_str = int_to_str((int) s_step->offset);
     Instr("istore", step_offset_str, NULL, NULL);
 
@@ -754,12 +1206,21 @@ node_st *BCglobdecl(node_st *node)
     // Add to import list
     char* name = GLOBDECL_NAME(node);
     const Symbol* var_symbol = ScopeTreeFind(CURRENT_SCOPE, name);
+
+    // Add dims before array
+    if (var_symbol->stype == ST_ARRAYVAR) {
+        char* num_str = vt_to_str(VT_NUM);
+        for (size_t i = 0; i < var_symbol->as.array.dim_count; i++) {
+            char* id_name = generate_array_dim_name(name, i);
+            ASMemitVarImport(&ASM, id_name, num_str);
+            MEMfree(id_name);
+        }
+    }
+
     ASMemitVarImport(
         &ASM,
         name,
         vt_to_str(var_symbol->vtype));
-
-    TRAVchildren(node);
 
     /**
      * Save to imported variables stack
@@ -774,40 +1235,76 @@ node_st *BCglobdecl(node_st *node)
 node_st *BCglobdef(node_st *node)
 {
     char* name = GLOBDEF_NAME(node);
-    Symbol* s = STlookup(CURRENT_SCOPE, name);
+    const Symbol* s = STlookup(CURRENT_SCOPE, name);
 #ifdef DEBUGGING
     ASSERT_MSG((s != NULL), "Bytecode: Couldn't find globdef symbol in scope");
 #endif // DEBUGGING
+
+    if (s->stype == ST_ARRAYVAR) {
+        for (size_t i = 0; i < s->as.array.dim_count; i++) {
+            ASMemitGlobVar(&ASM, vt_to_str(VT_NUM));
+        }
+    }
+
     ASMemitGlobVar(
         &ASM,
         vt_to_str(s->vtype));
 
     if (GLOBDEF_EXPORT(node)) {
+        if (s->stype == ST_ARRAYVAR) {
+            for (size_t i = 0; i < s->as.array.dim_count; i++) {
+                const Symbol* s_dim = s->as.array.dims[i];
+                ASMemitVarExport(&ASM, s_dim->name, s_dim->offset);
+            }
+        }
+
         ASMemitVarExport(
             &ASM,
             s->name,
             s->offset);
     }
 
-    if (GLOBDEF_INIT(node) != NULL) {
-        TRAVinit(node);
-#ifdef DEBUGGING
-        ASSERT_MSG((LAST_TYPE == s->vtype), "Bytecode: Globdef type and init type are not the same");
-#endif // DEBUGGING
-
-        char* offset_str = int_to_str((int) s->offset);
-        switch (LAST_TYPE) {
-            case VT_NUM: Instr("istoreg", offset_str, NULL, NULL); break;
-            case VT_FLOAT: Instr("fstoreg", offset_str, NULL, NULL); break;
-            case VT_BOOL: Instr("bstoreg", offset_str, NULL, NULL); break;
-            default:
-#ifdef DEBUGGING
-                ERROR("Bytecode: Unexpected globdef type %s", vt_to_str(LAST_TYPE));
-#endif // DEBUGGING
-        }
-
-        MEMfree(offset_str);
+    // In case of array, store dimensions
+    if (s->stype == ST_ARRAYVAR) {
+        fill_array_dims(s, GLOBDEF_DIMS(node));
+        create_array_with_size(s);
     }
+
+    // Early return if no init
+    if (GLOBDEF_INIT(node) == NULL) {
+        return node;
+    }
+
+    TRAVinit(node);
+
+    if (s->stype == ST_ARRAYVAR) {
+        // Separate handling for arrays
+
+        if (GLOBDEF_INIT(node) != NULL) {
+            if (NODE_TYPE(GLOBDEF_INIT(node)) == NT_ARREXPR) {
+                // Arrexpr
+                init_array_with_arrexpr(s, count_arrexpr(GLOBDEF_INIT(node)));
+            } else {
+                // Scalar
+                init_array_with_scalar(s);
+            }
+
+            return node;
+        }
+    }
+
+    char* offset_str = int_to_str((int) s->offset);
+    switch (LAST_TYPE) {
+        case VT_NUM: Instr("istoreg", offset_str, NULL, NULL); break;
+        case VT_FLOAT: Instr("fstoreg", offset_str, NULL, NULL); break;
+        case VT_BOOL: Instr("bstoreg", offset_str, NULL, NULL); break;
+        default:
+#ifdef DEBUGGING
+            ERROR("Bytecode: Unexpected globdef type %s", vt_to_str(LAST_TYPE));
+#endif // DEBUGGING
+    }
+
+    MEMfree(offset_str);
 
     TRAVdims(node);
 
@@ -827,6 +1324,8 @@ node_st *BCparam(node_st *node)
 {
     TRAVchildren(node);
 
+
+
     /**
      * Variable as specified in funcall argument might already be on stack?
      * !!! Check this because I actually have no clue
@@ -842,41 +1341,70 @@ node_st *BCvardecl(node_st *node)
 {
     // TODO: Array support
 
-    if (VARDECL_INIT(node) != NULL) {
-        TRAVinit(node);
-        char* name = VARDECL_NAME(node);
-        const Symbol* s = STlookup(CURRENT_SCOPE, name);
+    // Look up symbol and variabletype
+    char* name = VARDECL_NAME(node);
+    const Symbol* s = STlookup(CURRENT_SCOPE, name);
 #ifdef DEBUGGING
-        ASSERT_MSG((s != NULL), "BYTECODE: Could not find symbol named %s", name);
+    ASSERT_MSG((s != NULL), "BYTECODE: Could not find symbol named %s", name);
 #endif // DEBUGGING
 
-        size_t current_level = CURRENT_SCOPE->nesting_level;
-        size_t var_level = s->parent_scope->nesting_level;
-        size_t var_offset = s->offset;
-#ifdef DEBUGGING
-        ASSERT_MSG((current_level == var_level),
-            "BYTECODE: Symbol declaration %s, only found in different scope",
-            name);
-#endif // DEBUGGING
-
-        char* instr = NULL;
-        switch (s->vtype) {
-            case VT_NUM: instr = STRcpy("i"); LAST_TYPE = VT_NUM; break;
-            case VT_FLOAT: instr = STRcpy("f"); LAST_TYPE = VT_FLOAT; break;
-            case VT_BOOL: instr = STRcpy("b"); LAST_TYPE = VT_BOOL; break;
-            // TODO: ARRAYS
-            default:  // Should not occur
-#ifdef DEBUGGING
-                ERROR("Incompatible Vardecl node with valuetype of %i", s->vtype);
-#endif // DEBUGGING
-        }
-
-        instr = safe_concat_str(instr, STRcpy("store"));
-        char* var_offset_str = int_to_str((int) var_offset);
-        Instr(instr, var_offset_str, NULL, NULL);
-        MEMfree(instr);
-        MEMfree(var_offset_str);
+    // In case of array, store dimensions
+    if (s->stype == ST_ARRAYVAR) {
+        fill_array_dims(s, VARDECL_DIMS(node));
+        create_array_with_size(s);
     }
+
+    // Early return if no init
+    if (VARDECL_INIT(node) == NULL) {
+        TRAVnext(node);
+        return node;
+    }
+
+    TRAVinit(node);
+
+    if (s->stype == ST_ARRAYVAR) {
+        // Separate handling for arrays
+
+        if (VARDECL_INIT(node) != NULL) {
+            if (NODE_TYPE(VARDECL_INIT(node)) == NT_ARREXPR) {
+                // Arrexpr
+                init_array_with_arrexpr(s, count_arrexpr(VARDECL_INIT(node)));
+            } else {
+                // Scalar
+                init_array_with_scalar(s);
+            }
+
+            TRAVnext(node);
+            return node;
+        }
+    }
+
+    const size_t current_level = CURRENT_SCOPE->nesting_level;
+    const size_t var_level = s->parent_scope->nesting_level;
+    const size_t var_offset = s->offset;
+#ifdef DEBUGGING
+    ASSERT_MSG((current_level == var_level),
+        "BYTECODE: Symbol declaration %s, only found in different scope",
+        name);
+#endif // DEBUGGING
+
+    char* instr = NULL;
+    switch (s->vtype) {
+        case VT_NUM: instr = STRcpy("i"); LAST_TYPE = VT_NUM; break;
+        case VT_FLOAT: instr = STRcpy("f"); LAST_TYPE = VT_FLOAT; break;
+        case VT_BOOL: instr = STRcpy("b"); LAST_TYPE = VT_BOOL; break;
+        // TODO: ARRAYS
+        default:  // Should not occur
+#ifdef DEBUGGING
+            ERROR("Incompatible Vardecl node with valuetype of %i", s->vtype);
+#endif // DEBUGGING
+    }
+
+    instr = safe_concat_str(instr, STRcpy("store"));
+    char* var_offset_str = int_to_str((int) var_offset);
+    Instr(instr, var_offset_str, NULL, NULL);
+    MEMfree(instr);
+    MEMfree(var_offset_str);
 
     TRAVnext(node);
 
@@ -957,8 +1485,9 @@ node_st *BCbinop(node_st *node)
         MEMfree(end_and_label);
 
         return node;
+    }
 
-    } else if (t == BO_or) {
+    if (t == BO_or) {
         // Short-circuit OR (||)
         char* short_circuit_label = generate_label_name(STRcpy("else"));
         char* end_or_label = generate_label_name(STRcpy("end"));
@@ -1134,16 +1663,31 @@ node_st *BCmonop(node_st *node)
  */
 node_st *BCvarlet(node_st *node)
 {
-    TRAVchildren(node);
-
+    // Find symbol for varlet
     const Symbol* s = ScopeTreeFind(CURRENT_SCOPE, VARLET_NAME(node));
 #ifdef DEBUGGING
     ASSERT_MSG((s != NULL), "BYTECODE: Could not find symbol named %s", VARLET_NAME(node));
 #endif // DEBUGGING
 
-    size_t current_level = CURRENT_SCOPE->nesting_level;
-    size_t var_level = s->parent_scope->nesting_level;
-    size_t var_offset = s->offset;
+    if (s->stype == ST_ARRAYVAR) {
+        // Value should already be at stack
+
+        // Push index onto stack (flatten multidim into single scalar)
+        flatten_dim_exprs(s, VARLET_INDICES(node));
+
+        // Push array reference onto stack
+        load_array_ref(s);
+
+        // Store value to index of array
+        store_array_ref_with_value(s);
+
+        // Return (don't run scalar instructions)
+        return node;
+    }
+
+    const size_t current_level = CURRENT_SCOPE->nesting_level;
+    const size_t var_level = s->parent_scope->nesting_level;
+    const size_t var_offset = s->offset;
 
     char* instr = NULL;
     switch (s->vtype) {
@@ -1153,7 +1697,7 @@ node_st *BCvarlet(node_st *node)
         // TODO: ARRAYS
         default:  // Should not occur
 #ifdef DEBUGGING
-            ERROR("Incompatible Varlet node with valuetype of %i", s->vtype);
+            ERROR("Incompatible Varlet node with valuetype of %s", vt_to_str(s->vtype));
 #endif // DEBUGGING
     }
 
@@ -1207,75 +1751,111 @@ node_st *BCvarlet(node_st *node)
  */
 node_st *BCvar(node_st *node)
 {
-    TRAVchildren(node);
-
     // Retrieve var symbol from AST
     const Symbol* s = VAR_SYMBOL(node);
 #ifdef DEBUGGING
-    ASSERT_MSG((s != NULL), "BYTECODE: Could not find symbol named %s", VAR_NAME(node));
+    ASSERT_MSG((s != NULL), "BYTECODE: Could not find symbol named %s in function %s",
+        VAR_NAME(node), CURRENT_SCOPE->parent_fun->name);
 #endif // DEBUGGING
+
+    if (s->stype == ST_ARRAYVAR) {
+        if (VAR_INDICES(node) == NULL) {
+            // If not indexed, push sizes to stack and then pointer
+            push_array_with_dims(s);
+            return node;
+        }
+
+        // If indexed, push value at index onto stack
+
+        // Push index onto stack (flatten multidim into single scalar)
+        flatten_dim_exprs(s, VAR_INDICES(node));
+
+        // Push array reference onto stack
+        load_array_ref(s);
+
+        // Store value to index of array
+        load_array_ref_with_value(s);
+
+        // Return (don't run scalar instructions)
+        return node;
+    }
 
     const size_t current_level = CURRENT_SCOPE->nesting_level;
     const size_t var_level = s->parent_scope->nesting_level;
     const size_t var_offset = s->offset;
 
     char* instr = NULL;
-    switch (s->vtype) {
-        case VT_NUM: instr = STRcpy("i"); LAST_TYPE = VT_NUM; break;
-        case VT_FLOAT: instr = STRcpy("f"); LAST_TYPE = VT_FLOAT; break;
-        case VT_BOOL: instr = STRcpy("b"); LAST_TYPE = VT_BOOL; break;
-        // TODO: ARRAYS
-        default:  // Should not occur
-#ifdef DEBUGGING
-            ERROR("Incompatible Var node with valuetype of %i", s->vtype);
-#endif // DEBUGGING
-            break;
-    }
 
-    if (var_level == 0) {
-        if (s->imported) {
-            instr = safe_concat_str(instr, STRcpy("loade"));
-        } else {
-            instr = safe_concat_str(instr, STRcpy("loadg"));
+    // Scalars
+    if (!IS_ARRAY(s->vtype)) {
+        switch (s->vtype) {
+            case VT_NUM: instr = STRcpy("i"); LAST_TYPE = VT_NUM; break;
+            case VT_FLOAT: instr = STRcpy("f"); LAST_TYPE = VT_FLOAT; break;
+            case VT_BOOL: instr = STRcpy("b"); LAST_TYPE = VT_BOOL; break;
+            // TODO: ARRAYS
+            default:  // Should not occur
+#ifdef DEBUGGING
+                ERROR("Incompatible Var node with valuetype of %s", vt_to_str(s->vtype));
+#endif // DEBUGGING
         }
 
-        char* var_offset_str = int_to_str((int) var_offset);
-        Instr(instr, var_offset_str, NULL, NULL);
-        MEMfree(var_offset_str);
-    }
-
-    else if (current_level == var_level) {
-        instr = safe_concat_str(instr, STRcpy("load"));
-        if (var_offset <= 3) {
-            switch (s->offset) {
-                case 0: instr = safe_concat_str(instr, STRcpy("_0")); break;
-                case 1: instr = safe_concat_str(instr, STRcpy("_1")); break;
-                case 2: instr = safe_concat_str(instr, STRcpy("_2")); break;
-                case 3: instr = safe_concat_str(instr, STRcpy("_3")); break;
-                default:  // Should never happen
-#ifdef DEBUGGING
-                    ERROR("Var with offset %lu was deemed to be within 0 and 3 inclusive", var_offset);
-#endif // DEBUGGING
+        if (var_level == 0) {
+            if (s->imported) {
+                instr = safe_concat_str(instr, STRcpy("loade"));
+            } else {
+                instr = safe_concat_str(instr, STRcpy("loadg"));
             }
-            Instr(instr, NULL, NULL, NULL);
-        } else {
+
             char* var_offset_str = int_to_str((int) var_offset);
             Instr(instr, var_offset_str, NULL, NULL);
             MEMfree(var_offset_str);
         }
+
+        else if (current_level == var_level) {
+            instr = safe_concat_str(instr, STRcpy("load"));
+            if (var_offset <= 3) {
+                switch (s->offset) {
+                    case 0: instr = safe_concat_str(instr, STRcpy("_0")); break;
+                    case 1: instr = safe_concat_str(instr, STRcpy("_1")); break;
+                    case 2: instr = safe_concat_str(instr, STRcpy("_2")); break;
+                    case 3: instr = safe_concat_str(instr, STRcpy("_3")); break;
+                    default:  // Should never happen
+#ifdef DEBUGGING
+                        ERROR("Var with offset %lu was deemed to be within 0 and 3 inclusive", var_offset);
+#endif // DEBUGGING
+                }
+                Instr(instr, NULL, NULL, NULL);
+            } else {
+                char* var_offset_str = int_to_str((int) var_offset);
+                Instr(instr, var_offset_str, NULL, NULL);
+                MEMfree(var_offset_str);
+            }
+        }
+
+        else {
+#ifdef DEBUGGING
+            ASSERT_MSG((current_level > var_level), "Calling variable from higher scope %lu compared to own scope %lu",
+                var_level, current_level);
+#endif // DEBUGGING
+            instr = safe_concat_str(instr, STRcpy("loadn"));
+            char* delta_offset_str = int_to_str((int) (current_level - var_level));
+            char* var_offset_str = int_to_str((int) var_offset);
+            Instr(instr, delta_offset_str, var_offset_str, NULL);
+            MEMfree(delta_offset_str);
+            MEMfree(var_offset_str);
+        }
+
+        LAST_TYPE = s->vtype;
     }
 
+    // Arrays
     else {
-#ifdef DEBUGGING
-        ASSERT_MSG((current_level > var_level), "Calling variable from higher scope %lu compared to own scope %lu",
-            var_level, current_level);
-#endif // DEBUGGING
-        instr = safe_concat_str(instr, STRcpy("loadn"));
-        char* delta_offset_str = int_to_str((int) (current_level - var_level));
-        char* var_offset_str = int_to_str((int) var_offset);
-        Instr(instr, delta_offset_str, var_offset_str, NULL);
-        MEMfree(delta_offset_str);
-        MEMfree(var_offset_str);
+        // Load int values of array dims and push array reference itself
+        push_array_with_dims(s);  // TODO: This doesn't do what I hope it does
+
+        // TODO: Handle indexed array
+
+        LAST_TYPE = s->vtype;
     }
 
     MEMfree(instr);
@@ -1317,7 +1897,7 @@ node_st *BCnum(node_st *node)
             char* val_str = int_to_str(v);
 
             // Refer to existing constant if possible
-            ConstEntry res = ASMfindConstant(&ASM, val_str);
+            const ConstEntry res = ASMfindConstant(&ASM, val_str);
 
             char* const_count_str;
             if (res.get != NULL) {
@@ -1359,7 +1939,7 @@ node_st *BCfloat(node_st *node)
         char* val_str = float_to_str(v);
 
         // Refer to existing constant if possible
-        ConstEntry res = ASMfindConstant(&ASM, val_str);
+        const ConstEntry res = ASMfindConstant(&ASM, val_str);
 
         char* const_count_str;
         if (res.get != NULL) {

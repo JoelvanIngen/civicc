@@ -12,7 +12,7 @@
  * @param imported boolean that sets whether the identifier was imported from an external file
  * @return pointer to new symbol struct
  */
-static Symbol* SBnew(char* name, const ValueType vt, const bool imported) {
+static Symbol* SBnew(const char* name, const ValueType vt, const bool imported) {
     Symbol* s = MEMmalloc(sizeof(Symbol));
     s->vtype = vt;
     s->name = STRcpy(name);
@@ -30,7 +30,7 @@ static Symbol* SBnew(char* name, const ValueType vt, const bool imported) {
  * @param imported boolean that sets whether the function was imported from an external file
  * @return pointer to new symbol struct
  */
-Symbol* SBfromFun(char* name, const ValueType vt, const size_t param_count, const bool imported) {
+Symbol* SBfromFun(const char* name, const ValueType vt, const size_t param_count, const bool imported) {
     Symbol* s = SBnew(name, vt, imported);
     s->stype = ST_FUNCTION;
     s->as.fun.label_name = NULL;
@@ -48,12 +48,11 @@ Symbol* SBfromFun(char* name, const ValueType vt, const size_t param_count, cons
  * @param imported boolean that sets whether the array was imported from an external file
  * @return pointer to new symbol struct
  */
-Symbol* SBfromArray(char* name, const ValueType vt, const bool imported) {
+Symbol* SBfromArray(const char* name, const ValueType vt, const bool imported) {
     Symbol* s = SBnew(name, vt, imported);
     s->stype = ST_ARRAYVAR;
     s->as.array.dim_count = 0;
-    s->as.array.capacity = INITIAL_LIST_SIZE;
-    s->as.array.dims = MEMmalloc(s->as.array.capacity * sizeof(size_t));
+    s->as.array.dims = NULL;
     return s;
 }
 
@@ -64,27 +63,28 @@ Symbol* SBfromArray(char* name, const ValueType vt, const bool imported) {
  * @param imported boolean that sets whether the variable was imported from an external file
  * @return pointer to new symbol struct
  */
-Symbol* SBfromVar(char* name, const ValueType vt, const bool imported) {
+Symbol* SBfromVar(const char* name, const ValueType vt, const bool imported) {
     Symbol* s = SBnew(name, vt, imported);
     s->stype = ST_VALUEVAR;
     return s;
 }
 
-Symbol* SBfromForLoop(char* adjusted_name) {
+/**
+ * Creates a new symbol for a for-loop. This is a special symbol, containing useless data but
+ * containing nested for-loop scope
+ * @param adjusted_name name adjusted for for-loops so it cannot collide with user-generated names
+ * @return pointer to new symbol struct
+ */
+Symbol* SBfromForLoop(const char* adjusted_name) {
     Symbol* s = SBnew(adjusted_name, VT_NULL, false);
     s->stype = ST_FORLOOP;
     return s;
 }
 
-/* Free symbol struct for function or array. Vars don't need
- * their struct members free. See SBfromVar.abort
- *
- * s_ptr: Is of type &(s*) used to remove dangling vars and free memory.
- *
- * Output: None
- * Side-effects: Memory is freed for *s and dangling variable is resolved
- * by setting *s = NULL.
-*/
+/**
+ * Frees a symbol struct and sets its pointer to NULL
+ * @param s_ptr double pointer to symbol struct to free
+ */
 void SBfree(Symbol** s_ptr) {
     Symbol* s = *s_ptr;
     switch (s->stype) {
@@ -95,6 +95,12 @@ void SBfree(Symbol** s_ptr) {
             if (!s->imported) STfree(&s->as.fun.scope);
             break;
         case ST_ARRAYVAR:
+            if (s->as.array.dims != NULL) {
+                // for (size_t i = 0; i < s->as.array.dim_count; i++) {
+                //     if (s->as.array.dims[i] != NULL)
+                //         SBfree(&s->as.array.dims[i]);
+                // }
+            }
             MEMfree(s->as.array.dims); break;
         case ST_FORLOOP:
             STfree(&s->as.forloop.scope); break;
@@ -104,51 +110,4 @@ void SBfree(Symbol** s_ptr) {
     MEMfree(s->name);
     MEMfree(s);
     *s_ptr = NULL;
-}
-
-/* Add dimension to array by reallocating and storing
- * dimension count in symbol struct.
- *
- * Additional information: The array is an 1d array
- * that functions as a multi-dimensional array.
- *
- * s: pointer to symbol struct
- * dim: new dimension
- *
- * Output: None
- * Side-effects: memory reallocated for new dimension of array.
-*/
-void SBaddDim(Symbol* s, size_t dim) {
-#ifdef DEBUGGING
-    ASSERT_MSG((s->stype == ST_ARRAYVAR), "Tried to add dimension for non-array symbol");
-#endif
-    if (s->as.array.dim_count + 1 >= s->as.array.capacity) {
-        s->as.array.capacity *= 2;
-        s->as.array.dims = MEMrealloc(s->as.array.dims, s->as.array.capacity * sizeof(size_t));
-    }
-
-    *s->as.array.dims[s->as.array.dim_count] = dim;
-    s->as.array.dim_count++;
-}
-
-/* Add parameter to array of a symbol struct for a function. Check
- * SBfromFun.
- *
- * s: pointer to symbol struct of type function
- * vt: type of value to be added to array
- * dim_count: the current dimension of the array
- *
- * Output: None
- * Side-effects: If count greater than current capacity
- * increase the array size, and add new vallue to the array (params)
- * otherwise add value to params and increase param count.
-*/
-void SBaddParam(Symbol* s, size_t dim_count) {
-#ifdef DEBUGGING
-    ASSERT_MSG((s != NULL), "Got NULL value for symbol to add parameters to");
-    ASSERT_MSG((s->stype == ST_FUNCTION), "Tried to add parameter for non-function symbol");
-#endif
-
-    s->as.fun.param_dim_counts[s->as.fun.param_ptr] = dim_count;
-    s->as.fun.param_ptr++;
 }

@@ -2,12 +2,12 @@
 
 #include "table.h"
 
-/* Create a new symbol table
- *
- * Output: Symbol table of type SymbolTable*
- *
- * Side-effects: Memory allocation
-*/
+/**
+ * Creates a new symboltable struct and initialises boilerplate
+ * @param parent_table parent table of new symbol table (parent scope)
+ * @param parent_symbol parent symbol of new symbol table (parent function)
+ * @return pointer to new symbol table
+ */
 SymbolTable* STnew(SymbolTable* parent_table, Symbol* parent_symbol) {
     SymbolTable* st = MEMmalloc(sizeof(SymbolTable));
     st->localvar_offset_counter = 0;
@@ -19,12 +19,10 @@ SymbolTable* STnew(SymbolTable* parent_table, Symbol* parent_symbol) {
     return st;
 }
 
-/* Free memory of the table inside SymbolTable**
- *
- * Output: None
- *
- * Side-effects: Freeing memory allocated for table.
-*/
+/**
+ * Frees symboltable and sets pointer to NULL
+ * @param st_ptr double pointer to symboltable to free
+ */
 void STfree(SymbolTable** st_ptr) {
     SymbolTable* st = *st_ptr;
 
@@ -45,15 +43,12 @@ void STfree(SymbolTable** st_ptr) {
     *st_ptr = NULL;
 }
 
-/* Insert new value into symbol table if it does not exist
- *
- * st: Pointer to symbol table
- * name: Name of var to be added to table
- * sym: Struct containing all information of identifier
- *
- * Output: None
- * Side-effect: Added new identifier to table
-*/
+/**
+ * Adds a new symbol to symboltable if it doesn't exist yet
+ * @param st pointer to symbol table
+ * @param name name of symbol to insert, functions as hashtable key
+ * @param sym pointer to symbol to insert
+ */
 void STinsert(SymbolTable* st, char* name, Symbol* sym) {
     if (HTlookup(st->table, name) != NULL) {
         USER_ERROR("Symbol %s already exists, but is redefined", name);
@@ -68,12 +63,12 @@ void STinsert(SymbolTable* st, char* name, Symbol* sym) {
     HTinsert(st->table, STRcpy(name), sym);
 }
 
-/* Lookup value in Symbol Table
- *
- * Output: Sym, containing all information about the identifier
- *
- * Side-effects: None.
-*/
+/**
+ * Finds a symbol in a symboltable. Does not search in parent scopes.
+ * @param st pointer to symboltable
+ * @param name name to look up in symboltable
+ * @return symbol if found, otherwise NULL
+ */
 Symbol* STlookup(const SymbolTable* st, char* name) {
     return HTlookup(st->table, name);
 }
