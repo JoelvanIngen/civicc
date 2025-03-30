@@ -13,8 +13,6 @@
 
 #include "common.h"
 #include "global/globals.h"
-#include "argstack.h"
-#include "dimsliststack.h"
 #include "symbol/scopetree.h"
 #include "symbol/table.h"
 
@@ -34,13 +32,6 @@ static ValueType LAST_TYPE;
 
 // Current scope in the tree
 static SymbolTable* CURRENT_SCOPE;
-
-// Stacking nested function calls
-static bool SAVING_ARGS = false;
-static ArgListStack* ALS;
-
-// Stacking nested array indexing
-static DimsListStack* DLS;
 
 // Flag to determine if we are saving indexes to stack
 static bool INDEXING_ARRAY = false;
@@ -75,6 +66,9 @@ static size_t FUN_EXPORT_OFFSET = 0;
     } \
 } while (false)
 
+/**
+ * Exits if one or more errors have occurred
+ */
 static void exit_if_error() {
     if (HAD_ERROR) {
         USER_ERROR("One or multiple errors occurred, exiting...");
@@ -82,10 +76,23 @@ static void exit_if_error() {
     }
 }
 
+/**
+ * Retrieves a given identifier in the top scope (not any parent scopes)
+ * and returns existence of identifier
+ * @param name name to lookup
+ * @return boolean indicating presence of the name in the top scope
+ */
 static bool name_exists_in_top_scope(char* name) {
     return STlookup(CURRENT_SCOPE, name) != NULL;
 }
 
+/**
+ * Counts the amount of expressions starting from an exprs node.
+ * In case an exprs node points to an array, also counts the amount
+ * of dimensions, since they will be pushed too in a function call
+ * @param exprs_node starting exprs node
+ * @return amount of expressions found
+ */
 static size_t count_exprs(node_st* exprs_node) {
     size_t count = 0;
 
@@ -112,6 +119,11 @@ static size_t count_exprs(node_st* exprs_node) {
     return count;
 }
 
+/**
+ * Counts the amount of IDs in a linked IDs list
+ * @param ids_node starting ids node
+ * @return amount of IDs found
+ */
 static size_t count_ids(node_st* ids_node) {
     size_t count = 0;
 
@@ -139,6 +151,13 @@ static size_t count_params(node_st* param_node) {
     return count;
 }
 
+/**
+ * Creates symbols for all IDs and returns a pointer to an array of these symbols.
+ * @param id_node starting ids node
+ * @param count amount of IDs counted
+ * @param orig origin of the array; imported, local
+ * @return IDs as symbols with their own offset
+ */
 static Symbol** get_ids(node_st* id_node, const size_t count, const Origin orig) {
     Symbol** ids = MEMmalloc(sizeof(Symbol*) * count);
 
@@ -156,7 +175,10 @@ static Symbol** get_ids(node_st* id_node, const size_t count, const Origin orig)
         switch (orig) {
             case IMPORTED_ORIGIN: s->offset = VAR_IMPORT_OFFSET++; break;
             case LOCAL_ORIGIN: s->offset = CURRENT_SCOPE->localvar_offset_counter++; break;
-            case GLOBAL_ORIGIN: s->offset = GLOBAL_VAR_OFFSET++; break;
+            default:
+#ifdef DEBUGGING
+                ERROR("Cannot get IDs on a global-defined variable");
+#endif // DEBUGGING
         }
 
         id_node = IDS_NEXT(id_node);
@@ -165,28 +187,39 @@ static Symbol** get_ids(node_st* id_node, const size_t count, const Origin orig)
     return ids;
 }
 
-static Symbol** get_exprs(node_st* exprs_node, const char* parent_name, const size_t count, const Origin orig,
-    const ValueType require_type) {
+/**
+ * Creates symbols for all expressions (dimensions) of array and returns pointer to
+ * an array of these symbols
+ * @param exprs_node starting exprs node
+ * @param array_name name of the array used for the creating of symbol names
+ * @param count amount of exprs expected
+ * @param orig origin of the array; global or local
+ * @return pointer to array of created symbols for array indices
+ */
+static Symbol** get_exprs(node_st* exprs_node, const char* array_name, const size_t count, const Origin orig) {
 
     Symbol** ids = MEMmalloc(sizeof(Symbol*) * count);
 
     for (size_t i = 0; i < count; i++) {
-        char* name = generate_array_dim_name(parent_name, i);
-        Symbol* s = SBfromVar(name, VT_NUM, orig == IMPORTED_ORIGIN);
+        char* name = generate_array_dim_name(array_name, i);
+        Symbol* s = SBfromVar(name, VT_NUM, false);
         ids[i] = s;
 
         STinsert(CURRENT_SCOPE, name, s);
 
         switch (orig) {
-            case IMPORTED_ORIGIN: s->offset = VAR_IMPORT_OFFSET++; break;
             case LOCAL_ORIGIN: s->offset = CURRENT_SCOPE->localvar_offset_counter++; break;
             case GLOBAL_ORIGIN: s->offset = GLOBAL_VAR_OFFSET++; break;
+            default:
+#ifdef DEBUGGING
+                ERROR("Cannot get exprs on an imported variable");
+#endif // DEBUGGING
         }
 
         TRAVexpr(exprs_node);
-        if (require_type != VT_NULL && require_type != LAST_TYPE) {
+        if (LAST_TYPE != VT_NUM) {
             HAD_ERROR = true;
-            USER_ERROR("Type mismatch; expected %s but got %s", vt_to_str(require_type), vt_to_str(LAST_TYPE));
+            USER_ERROR("Type mismatch; expected int but got %s", vt_to_str(LAST_TYPE));
         }
 
         exprs_node = EXPRS_NEXT(exprs_node);
@@ -196,17 +229,12 @@ static Symbol** get_exprs(node_st* exprs_node, const char* parent_name, const si
     return ids;
 }
 
-static size_t count_param_dims(node_st* param_node) {
-    size_t count = 0;
-    node_st* dim_node = PARAM_DIMS(param_node);
-
-    while (dim_node != NULL) {
-        count++;
-        dim_node = IDS_NEXT(dim_node);
-    }
-    return count;
-}
-
+/**
+ * Adds all types of parameters to function symbol. Prepends dimensions to arrays.
+ * @param param_node starting param node
+ * @param s function symbol
+ * @param param_count amount of expected parameters
+ */
 static void find_param_types(node_st* param_node, const Symbol* s, const size_t param_count) {
     for (size_t i = 0; i < param_count; i++) {
         const size_t n_ids = count_ids(PARAM_DIMS(param_node));
@@ -223,6 +251,12 @@ static void find_param_types(node_st* param_node, const Symbol* s, const size_t 
     }
 }
 
+/**
+ * Finds all types of variables provided in a function call
+ * @param exprs_node starting exprs node
+ * @param count amount of arguments expected, including array dimensions
+ * @return amount of arguments provided in function call
+ */
 static ValueType* find_funcall_types(node_st* exprs_node, const size_t count) {
     ValueType* types = MEMmalloc(sizeof(ValueType) * count);
 
@@ -301,11 +335,7 @@ char* generate_unique_fun_label_name(const Symbol* s) {
 }
 
 void CTAinit() {  }
-void CTAfini() {
-    // Free functions also delete any leftovers, we don't worry about cleaning up
-    ALSfree(&ALS);
-    DLSfree(&DLS);
-}
+void CTAfini() {  }
 
 /**
  * @fn CTAprogram
@@ -314,12 +344,6 @@ node_st *CTAprogram(node_st *node)
 {
     CURRENT_SCOPE = STnew(NULL, NULL);
     GB_GLOBAL_SCOPE = CURRENT_SCOPE;
-
-    // Initialise funcall argument stack
-    ALS = ALSnew();
-
-    // Initialise dimension stack
-    DLS = DLSnew();
 
     /* First pass; we only look at function definitions, so we can correctly
      * handle usages of functions that have not been defined yet */
@@ -360,14 +384,9 @@ node_st *CTAexprs(node_st *node)
     // Track since array indexing requires integers as last type
     const bool was_indexing_array = INDEXING_ARRAY;
 
-    // Keep state of argument keeping and set to false to prevent children from adding themselves
-    const bool was_saving_args = SAVING_ARGS;
-
     INDEXING_ARRAY = false;
-    SAVING_ARGS = false;
     TRAVexpr(node);
     INDEXING_ARRAY = was_indexing_array;
-    SAVING_ARGS = was_saving_args;
 
     if (INDEXING_ARRAY) {
         // Array indexes must always be integers
@@ -375,10 +394,6 @@ node_st *CTAexprs(node_st *node)
             HAD_ERROR = true;
             USER_ERROR("Wrong index type in array index, expected int but got %s", vt_to_str(LAST_TYPE));
         }
-    }
-
-    if (SAVING_ARGS) {
-        ALSadd(ALS, LAST_TYPE);
     }
 
     TRAVnext(node);
@@ -803,7 +818,7 @@ node_st *CTAglobdef(node_st *node)
 
         // Create symbols and add to table for all index variables
         // Also traverses the exprs so we don't need to manually
-        Symbol** ids = get_exprs(first_expr, name, n_dims, GLOBAL_ORIGIN, VT_NUM);
+        Symbol** ids = get_exprs(first_expr, name, n_dims, GLOBAL_ORIGIN);
 
         s->as.array.dim_count = n_dims;
         s->as.array.dims = ids;
@@ -920,7 +935,7 @@ node_st *CTAvardecl(node_st *node)
 
         // Create symbols and add to table for all index variables
         // Also traverses the exprs so we don't need to manually
-        Symbol** ids = get_exprs(first_expr, name, n_dims, LOCAL_ORIGIN, VT_NUM);
+        Symbol** ids = get_exprs(first_expr, name, n_dims, LOCAL_ORIGIN);
 
         s->as.array.dim_count = n_dims;
         s->as.array.dims = ids;
