@@ -39,7 +39,13 @@ static bool HAD_EXPR = false;
 // Checks whether a return statement is issued (or if we need to implicitly add one in case of void)
 static bool HAD_RETURN = false;
 
-// Shortcuts to prevent having to provide asm as argument every call
+/**
+ * Emits instruction; shortcut to prevent manually passing ASM pointer
+ * @param instr_name name of instruction
+ * @param arg0 optional first argument
+ * @param arg1 optional second argument
+ * @param arg2 optional third argument
+ */
 void Instr(char* instr_name, char* arg0, char* arg1, char* arg2) {
     if (CURRENT_SCOPE->nesting_level == 0) {
         ASMemitInit(&ASM, instr_name, arg0, arg1, arg2);
@@ -48,10 +54,21 @@ void Instr(char* instr_name, char* arg0, char* arg1, char* arg2) {
     }
 }
 
-void Label(char* label, bool is_fun) {
+/**
+ * Emits label; shortcut to prevent manually passing ASM pointer
+ * @param label label name
+ * @param is_fun boolean indicating whether label is a function start of regular label
+ */
+void Label(char* label, const bool is_fun) {
     ASMemitLabel(&ASM, label, is_fun);
 }
 
+/**
+ * Creates an array of valuetypes represented as strings
+ * @param vts pointer to array of valuetypes
+ * @param len length of array
+ * @return pointer to array of strings of valuetypes
+ */
 char** generate_vt_strs(const ValueType* vts, const size_t len) {
     char** strs = MEMmalloc(len * sizeof(char*));
     for (size_t i = 0; i < len; i++) {
@@ -60,15 +77,12 @@ char** generate_vt_strs(const ValueType* vts, const size_t len) {
     return strs;
 }
 
-static FunExportEntry find_fun_export(char* name) {
-    const FunExportEntry res = ASMfindFunExport(&ASM, name);
-#ifdef DEBUGGING
-    ASSERT_MSG((res.get != 0), "Result of retrieving known exported function yielded no results");
-#endif // DEBUGGING
-    return res;
-}
-
-static FunImportEntry find_fun_import(char* name) {
+/**
+ * Finds a known function import in the import table and returns its entry in the table
+ * @param name name of function import to find
+ * @return found entry in function import table
+ */
+static FunImportEntry find_fun_import(const char* name) {
     const FunImportEntry res = ASMfindFunImport(&ASM, name);
 #ifdef DEBUGGING
     ASSERT_MSG((res.get != 0), "Result of retrieving known imported function yielded no results");
@@ -101,13 +115,17 @@ static void load_array_ref(const Symbol* arr) {
     } else if (arr->parent_scope->nesting_level == CURRENT_SCOPE->nesting_level) {
         Instr("aload", offset_str, NULL, NULL);
     } else {
-        char* nesting_diff_str = int_to_str((int) CURRENT_SCOPE->nesting_level - arr->parent_scope->nesting_level);
+        char* nesting_diff_str = int_to_str((int) (CURRENT_SCOPE->nesting_level - arr->parent_scope->nesting_level));
         Instr("aloadn", nesting_diff_str, offset_str, NULL);
         MEMfree(nesting_diff_str);
     }
     MEMfree(offset_str);
 }
 
+/**
+ * Emits the correct instruction for storing a value into an array reference
+ * @param arr array symbol
+ */
 static void store_array_ref_with_value(const Symbol* arr) {
     switch (arr->vtype) {
         case VT_NUMARRAY: Instr("istorea", NULL, NULL, NULL); break;
@@ -120,6 +138,10 @@ static void store_array_ref_with_value(const Symbol* arr) {
     }
 }
 
+/**
+ * Emits the correct instruction for loading a value from an array reference
+ * @param arr array symbol
+ */
 static void load_array_ref_with_value(const Symbol* arr) {
     switch (arr->vtype) {
         case VT_NUMARRAY: Instr("iloada", NULL, NULL, NULL); break;
@@ -147,12 +169,12 @@ static void push_array_dim(const Symbol* dim) {
         instr = "iload";
     } else {
         instr = "iloadn";
-        char* nesting_diff_str = int_to_str((int) CURRENT_SCOPE->nesting_level - dim->parent_scope->nesting_level);
+        char* nesting_diff_str = int_to_str((int) (CURRENT_SCOPE->nesting_level - dim->parent_scope->nesting_level));
         Instr(instr, nesting_diff_str, offset_str, NULL);
 
         MEMfree(nesting_diff_str);
         MEMfree(offset_str);
-        // Skip rest of the loop due to differing instruction format
+        // Skip rest of the function due to differing instruction format
         return;
     }
 
@@ -160,6 +182,11 @@ static void push_array_dim(const Symbol* dim) {
     MEMfree(offset_str);
 }
 
+/**
+ * Pushes all array dimensions starting from starting index onto the stack
+ * @param arr array symbol
+ * @param start start index
+ */
 static void push_array_dims(const Symbol* arr, const size_t start) {
     for (size_t i = start; i < arr->as.array.dim_count; i++) {
         const Symbol* dim = arr->as.array.dims[i];
@@ -168,6 +195,10 @@ static void push_array_dims(const Symbol* arr, const size_t start) {
     }
 }
 
+/**
+ * Emits the correct instructions for computing the size of an array at runtime
+ * @param arr array symbol
+ */
 static void comp_array_size(const Symbol* arr) {
     push_array_dims(arr, 0);
     for (size_t i = 1; i < arr->as.array.dim_count; i++) Instr("imul", NULL, NULL, NULL);
@@ -188,7 +219,7 @@ static void store_array_dim(const Symbol* dim) {
         instr = "istore";
     } else {
         instr = "istoren";
-        char* nesting_diff_str = int_to_str((int) CURRENT_SCOPE->nesting_level - dim->parent_scope->nesting_level);
+        char* nesting_diff_str = int_to_str((int) (CURRENT_SCOPE->nesting_level - dim->parent_scope->nesting_level));
         Instr(instr, nesting_diff_str, offset_str, NULL);
 
         MEMfree(nesting_diff_str);
@@ -218,7 +249,7 @@ static void push_array_with_dims(const Symbol* arr) {
         instr = "aload";
     } else {
         instr = "aloadn";
-        char* nesting_diff_str = int_to_str((int) CURRENT_SCOPE->nesting_level - arr->parent_scope->nesting_level);
+        char* nesting_diff_str = int_to_str((int) (CURRENT_SCOPE->nesting_level - arr->parent_scope->nesting_level));
         Instr(instr, nesting_diff_str, offset_str, NULL);
 
         MEMfree(nesting_diff_str);
@@ -253,6 +284,11 @@ static void fill_array_dims(const Symbol* arr, node_st* exprs_node) {
     }
 }
 
+/**
+ * Flattens exprs into flat array index for multidimensional arrays
+ * @param arr array symbol
+ * @param exprs_node starting exprs node
+ */
 static void flatten_dim_exprs(const Symbol* arr, node_st* exprs_node) {
     for (size_t i = 0; i < arr->as.array.dim_count; i++) {
         // Find index
@@ -305,30 +341,17 @@ static void create_array_with_size(const Symbol* arr) {
     } else if (arr->parent_scope->nesting_level == CURRENT_SCOPE->nesting_level) {
         Instr("astore", offset_str, NULL, NULL);
     } else {
-        char* nesting_diff_str = int_to_str((int) CURRENT_SCOPE->nesting_level - arr->parent_scope->nesting_level);
+        char* nesting_diff_str = int_to_str((int) (CURRENT_SCOPE->nesting_level - arr->parent_scope->nesting_level));
         Instr("astoren", nesting_diff_str, offset_str, NULL);
         MEMfree(nesting_diff_str);
     }
     MEMfree(offset_str);
 }
 
-static void init() {
-    CURRENT_SCOPE = GB_GLOBAL_SCOPE;
-}
-
-static void fini() {
-    ASM_FILE = fopen(global.output_file, "w");
-    if (ASM_FILE == NULL) {
-        fprintf(stderr, "Error creating bytecode file");
-        exit(1);
-    }
-    write_assembly(ASM_FILE, &ASM);
-    fclose(ASM_FILE);
-
-    // Free memory
-    STfree(&GB_GLOBAL_SCOPE);
-}
-
+/**
+ * Initialises an array with a single scalar
+ * @param arr array symbol
+ */
 static void init_array_with_scalar(const Symbol* arr) {
     // Expr must have been traversed and on stack top
 
@@ -408,7 +431,7 @@ static void init_array_with_scalar(const Symbol* arr) {
         Instr("iload", counter_offset_str, NULL, NULL);
         Instr("aload", arr_offset_str, NULL, NULL);
     } else {
-        char* nesting_diff_str = int_to_str((int) CURRENT_SCOPE->nesting_level - arr->parent_scope->nesting_level);
+        char* nesting_diff_str = int_to_str((int) (CURRENT_SCOPE->nesting_level - arr->parent_scope->nesting_level));
         Instr("iloadn", nesting_diff_str, counter_offset_str, NULL);
         Instr("aloadn", nesting_diff_str, arr_offset_str, NULL);
     }
@@ -442,7 +465,12 @@ static void init_array_with_scalar(const Symbol* arr) {
     MEMfree(for_loop_end_name);
 }
 
-// Counts the amount of expressions in the arrexpr, also errors if inconsistent size
+/**
+ * Counts the amount of expressions an arrexpr contains. Also explores nested
+ * arrexprs and errors on inconsistent size.
+ * @param node arrexpr node used to initialise array
+ * @return amount of expressions (recursively) contained by the arrexpr
+ */
 static size_t count_arrexpr(node_st* node) {
     size_t count = 0;
 
@@ -452,9 +480,8 @@ static size_t count_arrexpr(node_st* node) {
         return count_arrexpr(ARREXPR_EXPRS(node));
     }
 
-    bool only_arrexpr = false;
-
     if (type == NT_EXPRS) {
+        bool only_arrexpr = false;
         while (node != NULL) {
             if (NODE_TYPE(EXPRS_EXPR(node)) == NT_ARREXPR) {
                 count += count_arrexpr(EXPRS_EXPR(node));
@@ -474,6 +501,11 @@ static size_t count_arrexpr(node_st* node) {
     return count;
 }
 
+/**
+ * Initialises an array with an arrexpr. Supports nested arrexprs.
+ * @param arr array symbol
+ * @param count amout of initialisation exprs expected
+ */
 static void init_array_with_arrexpr(const Symbol* arr, const size_t count) {
     // Arrexprs must have been traversed and all stored on stack
     // We save them in reverse starting from the last initialised array index
@@ -512,6 +544,24 @@ static void init_array_with_arrexpr(const Symbol* arr, const size_t count) {
     }
 
     MEMfree(arr_offset_str);
+}
+
+static void init() {
+    CURRENT_SCOPE = GB_GLOBAL_SCOPE;
+}
+
+static void fini() {
+    // Write assembly output
+    ASM_FILE = fopen(global.output_file, "w");
+    if (ASM_FILE == NULL) {
+        fprintf(stderr, "Error creating bytecode file");
+        exit(1);
+    }
+    write_assembly(ASM_FILE, &ASM);
+    fclose(ASM_FILE);
+
+    // Free memory
+    STfree(&GB_GLOBAL_SCOPE);
 }
 
 /**
